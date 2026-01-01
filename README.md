@@ -8,6 +8,7 @@ A collection of tools to download a fresh Windows 11 ISO from Microsoft (via UUP
 Status
 ------
 - All scripts are ready to use. No binaries are included - everything downloads directly from Microsoft's CDN through the UUP dump helper.
+- Comprehensive error handling with automatic cleanup and detailed troubleshooting guidance.
 - Try this in a VM first. This setup modifies your bootloader and sets up an on-disk installer that can completely wipe your machine.
 
 Prerequisites

@@ -7,6 +7,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+source "$SCRIPT_DIR/lib_error.sh" 2>/dev/null || {
+  echo "[!] Error: Cannot load error handling library" >&2
+  echo "[!] Make sure lib_error.sh exists in $SCRIPT_DIR" >&2
+  exit 1
+}
+
 ISO_IN="${1:-}"
 PRESET="minimal" # minimal|lite|vanilla
 IMAGE_INDEX=1
@@ -26,13 +32,6 @@ EOF
 
 msg() { echo "[+] $*"; }
 warn() { echo "[!] $*" >&2; }
-err() { echo "[!] $*" >&2; exit 1; }
-
-require_cmd() {
-  for c in "$@"; do
-    command -v "$c" >/dev/null 2>&1 || err "Missing command: $c"
-  done
-}
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
@@ -74,26 +73,40 @@ build_removal_list() {
   local list_file
   case "$PRESET" in
     vanilla) return 0;;
-    minimal|lite) list_file="$ROOT_DIR/data/removal-presets/${PRESET}.txt";;
-    *) err "Unknown preset: $PRESET";;
+    minimal|lite|aggressive) list_file="$ROOT_DIR/data/removal-presets/${PRESET}.txt";;
+    *) fatal_error "Unknown preset: $PRESET" 1 "Valid presets: minimal, lite, aggressive, vanilla";;
   esac
+  
+  if [[ ! -f "$list_file" ]]; then
+    fatal_error "Preset file not found: $list_file" 40 \
+      "Preset file is missing from data/removal-presets/"
+  fi
+  
   load_list "$list_file"
   if [[ -n "$CUSTOM_LIST" ]]; then
+    if [[ ! -f "$CUSTOM_LIST" ]]; then
+      fatal_error "Custom list file not found: $CUSTOM_LIST" 1 \
+        "Specified custom removal list does not exist"
+    fi
     load_list "$CUSTOM_LIST"
   fi
 }
 
 ensure_tools() {
-  require_cmd 7z wimlib-imagex
+  require_commands 7z wimlib-imagex
+  
   if command -v xorriso >/dev/null 2>&1; then
     ISO_TOOL="xorriso"
   elif command -v genisoimage >/dev/null 2>&1; then
     ISO_TOOL="genisoimage"
   else
-    err "Need xorriso or genisoimage to rebuild the ISO"
+    fatal_error "Need xorriso or genisoimage to rebuild ISO" 10 \
+      "Install one of these packages: xorriso or genisoimage"
   fi
+  
   if ! command -v hivexregedit >/dev/null 2>&1; then
     warn "hivexregedit not found; registry bypass tweaks will be skipped"
+    warn "Install libhivex-bin (Debian/Ubuntu) or hivex (Fedora/Arch) for registry tweaks"
     SKIP_REG=1
   fi
 }
@@ -153,24 +166,53 @@ rebuild_iso() {
 main() {
   parse_args "$@"
   ensure_tools
-  [[ -f "$ISO_IN" ]] || err "ISO not found: $ISO_IN"
+  
+  # Verify input ISO exists
+  if [[ ! -f "$ISO_IN" ]]; then
+    fatal_error "ISO not found: $ISO_IN" 1 \
+      "Provide a valid path to Windows 11 ISO"
+  fi
+  
+  verify_file "$ISO_IN" 4000 "Input ISO"
+  
+  # Check disk space requirements
+  check_disk_space "$TMP_ROOT" 12000 "temporary working files"
+  check_disk_space "$(dirname "$OUT_ISO")" 6000 "output ISO"
+  
+  # Create working directory with cleanup registration
   WORK_DIR="$(mktemp -d "$TMP_ROOT/tiny11-XXXX")"
-  trap 'rm -rf "$WORK_DIR"' EXIT
+  register_temp_dir "$WORK_DIR"
+  
   mkdir -p "$WORK_DIR/iso" "$WORK_DIR/mount"
 
   msg "Extracting ISO..."
-  7z x -y -o"$WORK_DIR/iso" "$ISO_IN" >/dev/null
+  if ! 7z x -y -o"$WORK_DIR/iso" "$ISO_IN" >/dev/null 2>&1; then
+    fatal_error "Failed to extract ISO" 40 \
+      "ISO file may be corrupted or 7z encountered an error"
+  fi
 
   local install_img="$WORK_DIR/iso/sources/install.wim"
   if [[ ! -f "$install_img" ]]; then
     local esd="$WORK_DIR/iso/sources/install.esd"
-    [[ -f "$esd" ]] || err "No install.wim or install.esd found"
+    if [[ ! -f "$esd" ]]; then
+      fatal_error "No install.wim or install.esd found" 40 \
+        "ISO may not be a valid Windows 11 installer"
+    fi
     msg "Converting install.esd -> install.wim (this may take a bit)..."
-    wimlib-imagex convert "$esd" "$install_img" >/dev/null
+    if ! wimlib-imagex convert "$esd" "$install_img" >/dev/null 2>&1; then
+      fatal_error "Failed to convert install.esd to install.wim" 40 \
+        "Check disk space and wimlib installation"
+    fi
   fi
 
   msg "Mounting image index $IMAGE_INDEX..."
-  wimlib-imagex mount "$install_img" "$IMAGE_INDEX" "$WORK_DIR/mount"
+  if ! wimlib-imagex mount "$install_img" "$IMAGE_INDEX" "$WORK_DIR/mount" 2>&1; then
+    fatal_error "Failed to mount WIM image" 40 \
+      "Image index may be invalid or wimlib encountered an error"
+  fi
+  
+  # Ensure unmount on cleanup
+  register_temp_dir "$WORK_DIR/mount"
 
   if [[ "$PRESET" != "vanilla" ]]; then
     remove_paths "$WORK_DIR/mount"
@@ -180,10 +222,15 @@ main() {
   fi
 
   msg "Committing changes..."
-  wimlib-imagex unmount "$WORK_DIR/mount" --commit
+  if ! wimlib-imagex unmount "$WORK_DIR/mount" --commit 2>&1; then
+    warn "Unmount with commit failed, trying without commit..."
+    wimlib-imagex unmount "$WORK_DIR/mount" 2>/dev/null || true
+    fatal_error "Failed to commit WIM changes" 40 \
+      "Changes to Windows image could not be saved"
+  fi
 
   rebuild_iso "$WORK_DIR/iso" "$OUT_ISO"
-  msg "Done. Output ISO: $OUT_ISO"
+  success_msg "Done. Output ISO: $OUT_ISO"
 }
 
 main "$@"

@@ -6,9 +6,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+source "$SCRIPT_DIR/lib_error.sh" 2>/dev/null || {
+  echo "[!] Error: Cannot load error handling library" >&2
+  exit 1
+}
+
 msg() { echo "[+] $*"; }
 warn() { echo "[!] $*" >&2; }
-err() { echo "[!] $*" >&2; exit 1; }
 
 prompt_yn() {
   local prompt="$1"
@@ -56,7 +60,10 @@ EOF
 check_dependencies() {
   msg "Checking dependencies..."
   if [[ -x "$SCRIPT_DIR/check_deps.sh" ]]; then
-    "$SCRIPT_DIR/check_deps.sh" || err "Missing dependencies. Install them and try again."
+    if ! "$SCRIPT_DIR/check_deps.sh"; then
+      fatal_error "Missing required dependencies" 10 \
+        "Run: ./scripts/check_deps.sh to see what's missing, then install the packages"
+    fi
   else
     warn "check_deps.sh not found, skipping dependency check"
   fi
@@ -84,7 +91,10 @@ step_fetch_iso() {
     warn "Custom settings not implemented in interactive mode. Edit fetch_iso.sh args manually."
   }
   
-  "$SCRIPT_DIR/fetch_iso.sh" || err "ISO download failed"
+  if ! "$SCRIPT_DIR/fetch_iso.sh"; then
+    fatal_error "ISO download failed" 20 \
+      "Check network connection and disk space. See error messages above."
+  fi
   echo ""
 }
 
@@ -107,7 +117,10 @@ step_tiny11() {
   preset="${preset:-minimal}"
   
   msg "Applying preset: $preset"
-  "$SCRIPT_DIR/tiny11.sh" "$ROOT_DIR/out/win11.iso" --preset "$preset" || err "Tiny11 processing failed"
+  if ! "$SCRIPT_DIR/tiny11.sh" "$ROOT_DIR/out/win11.iso" --preset "$preset"; then
+    fatal_error "Tiny11 processing failed" 40 \
+      "Check disk space and WIM manipulation tools. See error messages above."
+  fi
   
   # Use the tiny ISO if it was created
   if [[ -f "$ROOT_DIR/out/win11-tiny.iso" ]]; then
@@ -122,9 +135,12 @@ step_grub() {
   echo ""
   warn "This step requires root privileges and will modify GRUB configuration"
   
-  prompt_yn "Continue?" "y" || err "User aborted"
+  prompt_yn "Continue?" "y" || exit 0
   
-  sudo "$SCRIPT_DIR/grub_entry.sh" "$ROOT_DIR/out/win11.iso" || err "GRUB configuration failed"
+  if ! sudo "$SCRIPT_DIR/grub_entry.sh" "$ROOT_DIR/out/win11.iso"; then
+    fatal_error "GRUB configuration failed" 50 \
+      "Check that you have root access, GRUB is installed, and Secure Boot is disabled."
+  fi
   echo ""
 }
 
