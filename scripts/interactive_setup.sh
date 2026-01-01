@@ -188,8 +188,8 @@ query_available_builds() {
   local var_name="$3"  # Variable name to store update ID
   local cache_key="${channel}_${arch}"
   
-  # Check cache first
-  if [[ -n "${BUILD_CACHE_IDS[$cache_key]}" ]]; then
+  # Check cache first (safe check for unset key)
+  if [[ -v BUILD_CACHE_IDS[$cache_key] && -n "${BUILD_CACHE_IDS[$cache_key]}" ]]; then
     local cached_id="${BUILD_CACHE_IDS[$cache_key]}"
     echo "  Using cached build: $cached_id"
     
@@ -240,15 +240,17 @@ get_cached_build_details() {
   local languages_var="$4"
   local cache_key="${channel}_${arch}"
   
-  # Return cached data if available
-  if [[ -n "${BUILD_CACHE_EDITIONS[$cache_key]}" && -n "${BUILD_CACHE_LANGUAGES[$cache_key]}" ]]; then
-    if [[ -n "$editions_var" ]]; then
-      eval "$editions_var='${BUILD_CACHE_EDITIONS[$cache_key]}'"
+  # Return cached data if available (safe check for unset keys)
+  if [[ -v BUILD_CACHE_EDITIONS[$cache_key] && -v BUILD_CACHE_LANGUAGES[$cache_key] ]]; then
+    if [[ -n "${BUILD_CACHE_EDITIONS[$cache_key]}" && -n "${BUILD_CACHE_LANGUAGES[$cache_key]}" ]]; then
+      if [[ -n "$editions_var" ]]; then
+        eval "$editions_var='${BUILD_CACHE_EDITIONS[$cache_key]}'"
+      fi
+      if [[ -n "$languages_var" ]]; then
+        eval "$languages_var='${BUILD_CACHE_LANGUAGES[$cache_key]}'"
+      fi
+      return 0
     fi
-    if [[ -n "$languages_var" ]]; then
-      eval "$languages_var='${BUILD_CACHE_LANGUAGES[$cache_key]}'"
-    fi
-    return 0
   fi
   
   return 1
