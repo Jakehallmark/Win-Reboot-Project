@@ -26,6 +26,13 @@ source "$SCRIPT_DIR/lib_error.sh" 2>/dev/null || {
 
 msg() { echo "[+] $*"; }
 warn() { echo "[!] $*" >&2; }
+check_cancel() {
+  local val="${1,,}"
+  if [[ "$val" == "q" || "$val" == "quit" || "$val" == "exit" || "$val" == "b" ]]; then
+    msg "Exiting by user request."
+    exit 0
+  fi
+}
 log_uup_issue() {
   local title="$1"
   local details="${2:-}"
@@ -48,6 +55,7 @@ prompt_yn() {
     read -r -p "$prompt [y/N]: " answer < /dev/tty
     answer="${answer:-n}"
   fi
+  check_cancel "$answer"
   
   [[ "${answer,,}" == "y" ]]
 }
@@ -302,10 +310,11 @@ query_build_details() {
   local parse_error
   parse_error=$(mktemp)
   local langs_list
-  langs_list="$(python3 - <<'PY' 2>"$parse_error" <<<"$langs_json"
+  langs_list="$(python3 - "$langs_json" 2>"$parse_error" <<'PY'
 import json, sys
 try:
-    input_data = sys.stdin.read().strip()
+    # JSON payload is passed as argv[1] to avoid stdin conflicts with heredocs
+    input_data = sys.argv[1].strip() if len(sys.argv) > 1 else ""
     if not input_data:
         print("Empty API response", file=sys.stderr)
         sys.exit(1)
@@ -380,10 +389,11 @@ PY
   # Parse editions response
   parse_error=$(mktemp)
   local eds_list
-  eds_list="$(python3 - <<'PY' 2>"$parse_error" <<<"$eds_json"
+  eds_list="$(python3 - "$eds_json" 2>"$parse_error" <<'PY'
 import json, sys
 try:
-    input_data = sys.stdin.read().strip()
+    # JSON payload is passed as argv[1] to avoid stdin conflicts with heredocs
+    input_data = sys.argv[1].strip() if len(sys.argv) > 1 else ""
     if not input_data:
         print("Empty API response", file=sys.stderr)
         sys.exit(1)
@@ -437,33 +447,30 @@ PY
 step_fetch_iso() {
   msg "Step 1: Download Windows 11 ISO"
   echo ""
-  
+
   if [[ -f "$ROOT_DIR/out/win11.iso" ]]; then
     local size_mb
     size_mb=$(($(stat -c%s "$ROOT_DIR/out/win11.iso" 2>/dev/null || echo 0) / 1024 / 1024))
     msg "Found existing ISO: out/win11.iso ($size_mb MB)"
     prompt_yn "Skip download and use existing ISO?" "y" && return 0
   fi
-  
+
   echo "Download options:"
   echo "  Edition: Professional (default)"
   echo "  Language: en-us (default)"
   echo "  Architecture: x64 (amd64)"
   echo "  Channel: Retail (stable release)"
   echo ""
-  
+
   local fetch_args=()
-  
+
   if prompt_yn "Use default settings?" "y"; then
-    # Use defaults - no extra args needed
     :
   else
-    # Custom settings
     echo ""
     msg "Custom ISO Settings"
     echo ""
-    
-    # First, let user select channel and architecture to query available builds
+
     echo "Select Release Channel:"
     echo "  1) Retail (stable, recommended)"
     echo "  2) Release Preview (pre-release testing)"
@@ -471,17 +478,16 @@ step_fetch_iso() {
     local channel_choice
     read -r -p "Choice [1-2, default 1]: " channel_choice < /dev/tty
     channel_choice="${channel_choice:-1}"
-    
+    check_cancel "$channel_choice"
+
     local selected_channel
     case "$channel_choice" in
       1) selected_channel="retail";;
       2) selected_channel="rp";;
       *) warn "Invalid choice, using retail"; selected_channel="retail";;
     esac
-    
+
     echo ""
-    
-    # Architecture selection
     echo "Select Architecture:"
     echo "  1) x64 (amd64) - 64-bit Intel/AMD"
     echo "  2) arm64 - 64-bit ARM (for ARM devices)"
@@ -489,17 +495,17 @@ step_fetch_iso() {
     local arch_choice
     read -r -p "Choice [1-2, default 1]: " arch_choice < /dev/tty
     arch_choice="${arch_choice:-1}"
-    
+    check_cancel "$arch_choice"
+
     local selected_arch
     case "$arch_choice" in
       1) selected_arch="amd64";;
       2) selected_arch="arm64";;
       *) warn "Invalid choice, using amd64"; selected_arch="amd64";;
     esac
-    
+
     echo ""
-    
-    # Query what's actually available for selected channel/arch
+
     local captured_update_id=""
     if ! query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
       err "Could not query available builds from UUP dump API"
@@ -513,30 +519,25 @@ step_fetch_iso() {
         err "Cannot proceed without build information"
         return 1
       fi
-      # Retry once
       echo ""
       if ! query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
         err "Query failed again. Please try again later or check your network connection."
         return 1
       fi
     fi
-    
+
     echo ""
     msg "The following build is available and will be downloaded"
-    
-    # Try to get cached build details first (from prefetch)
+
     local available_editions="" available_languages="" is_insider_build="false"
     if get_cached_build_details "$selected_channel" "$selected_arch" "available_editions" "available_languages"; then
       echo "  Using cached editions and languages"
       if [[ -n "$available_editions" && -n "$available_languages" ]]; then
         echo "  Available editions: $(echo "$available_editions" | wc -l) found"
         echo "  Available languages: $(echo "$available_languages" | wc -l) found"
-        if [[ "$available_languages" == "INSIDER_BUILD" ]]; then
-          is_insider_build="true"
-        fi
+        [[ "$available_languages" == "INSIDER_BUILD" ]] && is_insider_build="true"
       fi
     else
-      # Not in cache, query fresh with retry
       local retry_count=0
       local max_retries=2
       while [[ $retry_count -lt $max_retries ]]; do
@@ -551,15 +552,13 @@ step_fetch_iso() {
             break
           fi
         fi
-        
         ((retry_count++))
         if [[ $retry_count -lt $max_retries ]]; then
           warn "Query failed, waiting 15s before retry $retry_count/$max_retries..."
           sleep 15
         fi
       done
-      
-      # If still failed and not Insider build, abort
+
       if [[ "$is_insider_build" != "true" && (-z "$available_editions" || -z "$available_languages") ]]; then
         err "Could not fetch build details after $max_retries retries"
         echo ""
@@ -575,8 +574,7 @@ step_fetch_iso() {
         return 1
       fi
     fi
-    
-    # Skip edition/language selection for Insider builds
+
     if [[ "$is_insider_build" == "true" ]]; then
       echo ""
       echo "Since this is an Insider Preview build, edition and language are pre-configured."
@@ -584,88 +582,75 @@ step_fetch_iso() {
       echo ""
       fetch_args+=(--channel "$selected_channel")
       fetch_args+=(--arch "$selected_arch")
-      if [[ -n "$captured_update_id" ]]; then
-        fetch_args+=(--update-id "$captured_update_id")
-      fi
+      [[ -n "$captured_update_id" ]] && fetch_args+=(--update-id "$captured_update_id")
       msg "Configured settings: ${fetch_args[*]}"
       echo ""
     else
       echo ""
       fetch_args+=(--channel "$selected_channel")
       fetch_args+=(--arch "$selected_arch")
-      if [[ -n "$captured_update_id" ]]; then
-        fetch_args+=(--update-id "$captured_update_id")
-      fi
-      
-      # Edition selection (API data only)
+      [[ -n "$captured_update_id" ]] && fetch_args+=(--update-id "$captured_update_id")
+
       echo "Select Edition:"
-    
-      # Build dynamic menu from available editions
       local -a edition_list
       mapfile -t edition_list <<< "$available_editions"
-      local idx=1
+      local ed_idx=1
       local -A edition_map
-      
       for ed in "${edition_list[@]}"; do
-        echo "  $idx) $ed"
-        edition_map[$idx]="$ed"
-        ((idx++))
+        echo "  $ed_idx) $ed"
+        edition_map[$ed_idx]="$ed"
+        ((ed_idx++))
       done
-      echo "  $idx) All editions (includes all above)"
-      edition_map[$idx]="all"
-      
+      echo "  $ed_idx) All editions (includes all above)"
+      edition_map[$ed_idx]="all"
+
       echo ""
       local edition_choice
-      read -r -p "Choice [1-$idx, default 1]: " edition_choice < /dev/tty
-      edition_choice="${edition_choice:-1}"
-      
+      read -r -p "Choice [1-$ed_idx, default $ed_idx]: " edition_choice < /dev/tty
+      edition_choice="${edition_choice:-$ed_idx}"
+      check_cancel "$edition_choice"
+
       local selected_edition="${edition_map[$edition_choice]}"
       if [[ "$selected_edition" == "all" ]]; then
-        # Build comma-separated list of all editions
         selected_edition=$(IFS=,; echo "${edition_list[*]}")
       fi
-      
       if [[ -n "$selected_edition" ]]; then
         fetch_args+=(--edition "$selected_edition")
       else
         warn "Invalid choice, using first available edition"
         fetch_args+=(--edition "${edition_list[0]}")
       fi
-      
+
       echo ""
-      
-      # Language selection (API data only)
       echo "Select Language:"
-    
-      # Build dynamic menu from available languages
       local -a lang_list
       mapfile -t lang_list <<< "$available_languages"
-      local idx=1
+      local lang_idx=1
       local -A lang_map
-      
-      # Show first 10 languages
+
       local max_show=10
       local shown=0
       for lang in "${lang_list[@]}"; do
         if [[ $shown -lt $max_show ]]; then
-          echo "  $idx) $lang"
-          lang_map[$idx]="$lang"
-          ((idx++))
-          ((shown++))
+          echo "  $lang_idx) $lang"
+          lang_map[$lang_idx]="$lang"
+          ((lang_idx++))
+          shown=$((shown + 1))
         fi
       done
-      
+
       if [[ ${#lang_list[@]} -gt $max_show ]]; then
-        echo "  $idx) Other (enter manually from ${#lang_list[@]} available)"
-        lang_map[$idx]="other"
-        ((idx++))
+        echo "  $lang_idx) Other (enter manually from ${#lang_list[@]} available)"
+        lang_map[$lang_idx]="other"
+        ((lang_idx++))
       fi
-      
+
       echo ""
       local lang_choice
-      read -r -p "Choice [1-$((idx-1)), default 1]: " lang_choice < /dev/tty
+      read -r -p "Choice [1-$((lang_idx-1)), default 1]: " lang_choice < /dev/tty
       lang_choice="${lang_choice:-1}"
-      
+      check_cancel "$lang_choice"
+
       local selected_lang="${lang_map[$lang_choice]}"
       if [[ "$selected_lang" == "other" ]]; then
         echo ""
@@ -673,22 +658,23 @@ step_fetch_iso() {
         printf "  %s\n" "${lang_list[@]}"
         echo ""
         read -r -p "Enter language code: " selected_lang < /dev/tty
+        check_cancel "$selected_lang"
       fi
-      
+
       if [[ -n "$selected_lang" && "$selected_lang" != "other" ]]; then
         fetch_args+=(--lang "$selected_lang")
       else
         warn "Invalid choice, using ${lang_list[0]}"
         fetch_args+=(--lang "${lang_list[0]}")
       fi
-      
+
       echo ""
       msg "Configured settings: ${fetch_args[*]}"
       echo ""
     fi
-    fi
-    
-    echo ""
+  fi
+
+  echo ""
 }
 
 step_tiny11() {
@@ -708,6 +694,7 @@ step_tiny11() {
   local preset
   read -r -p "Preset [minimal/lite/vanilla]: " preset < /dev/tty
   preset="${preset:-minimal}"
+   check_cancel "$preset"
   
   msg "Applying preset: $preset"
   if ! "$SCRIPT_DIR/tiny11.sh" "$ROOT_DIR/out/win11.iso" --preset "$preset"; then
