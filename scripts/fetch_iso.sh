@@ -22,14 +22,48 @@ DRY_RUN=0
 
 usage() {
   cat <<'EOF'
-Usage: fetch_iso.sh [--lang en-us] [--edition professional,home] [--arch amd64]
-                    [--channel retail|rp] [--update-id <id>] [--dry-run]
+Usage: fetch_iso.sh [--lang LANG] [--edition EDITION] [--arch ARCH]
+                    [--channel CHANNEL] [--update-id ID] [--dry-run]
 
-Defaults: Retail, amd64, en-us, Professional. Output -> out/win11.iso
+Options:
+  --lang LANG          Language code (e.g., en-us, en-gb, es-es, fr-fr)
+  --edition EDITION    Edition(s) - single or comma-separated list
+                       Examples: professional, home, core, enterprise, education
+                                 professional,home,core (multiple editions)
+  --arch ARCH          Architecture: amd64 (x64) or arm64
+  --channel CHANNEL    Release channel: retail (stable) or rp (release preview)
+  --update-id ID       Specific build ID (skips API query, avoids rate limits)
+  --dry-run            Show what would be downloaded without actually downloading
+
+Defaults: 
+  Channel:    retail (stable release)
+  Arch:       amd64 (64-bit Intel/AMD)
+  Language:   en-us (English - United States)
+  Edition:    professional
+  Output:     out/win11.iso
+
+Examples:
+  # Download default (Retail, Professional, en-us, x64)
+  ./scripts/fetch_iso.sh
+  
+  # Download specific edition and language
+  ./scripts/fetch_iso.sh --edition home --lang es-es
+  
+  # Download multiple editions
+  ./scripts/fetch_iso.sh --edition professional,home,core
+  
+  # Use specific build ID (avoids API rate limits)
+  ./scripts/fetch_iso.sh --update-id 5510915e-64a2-4775-9c03-2057f94e36fc
+  
+  # Release Preview channel with ARM architecture
+  ./scripts/fetch_iso.sh --channel rp --arch arm64
+
 Notes:
-  - Uses UUP dump API to resolve a build ID unless --update-id is provided.
-  - Downloads a generated UUP dump package, then runs its uup_download_linux.sh.
-  - Network must reach uupdump.net and Microsoft CDN.
+  - Uses UUP dump API to resolve a build ID unless --update-id is provided
+  - Downloads a generated UUP dump package, then runs its uup_download_linux.sh
+  - Network must reach uupdump.net and Microsoft CDN
+  - To find available editions/languages for a build, use interactive mode
+  - API rate limiting: Use --update-id to skip the query step if already known
 EOF
 }
 
