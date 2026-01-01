@@ -53,8 +53,27 @@ Safety notes
 - Double-check `/etc/default/grub` and your target disk. GRUB changes affect the entire system.
 - Secure Boot must be disabled for the GRUB chainloader to work. If chainloading fails, you might want to look into wimboot or iPXE as alternatives (though those aren't implemented here yet).
 
-Quickstart
-----------
+Quick Install
+-------------
+
+Run this one-liner to download and launch the interactive setup (no git clone needed):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/install.sh | bash
+```
+
+Or if you prefer wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/install.sh | bash
+```
+
+This will clone the repo to `~/Win-Reboot-Project` and launch the interactive setup.
+
+Manual Setup
+------------
+If you've already cloned the repo:
+
 ```bash
 # Interactive mode (recommended for first-time users)
 ./scripts/interactive_setup.sh

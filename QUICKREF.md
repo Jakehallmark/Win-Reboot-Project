@@ -1,6 +1,20 @@
 # Quick Reference
 
-## One-Command Setup
+## Quick Install (No Clone Required)
+
+Download and run the interactive setup with one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/install.sh | bash
+```
+
+Or using wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/install.sh | bash
+```
+
+## One-Command Setup (After Clone)
 
 ```bash
 ./scripts/interactive_setup.sh

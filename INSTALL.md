@@ -68,11 +68,35 @@ sudo pacman -S hivex
 
 ## Installation Methods
 
-### Method 1: Interactive Setup (Recommended)
+### Method 1: Quick Install (No Git Clone Required)
 
-The easiest way to get started:
+The absolute easiest way - run directly from the web:
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/install.sh | bash
+```
+
+Or if you prefer wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/install.sh | bash
+```
+
+This will:
+- Clone the repository to `~/Win-Reboot-Project`
+- Make all scripts executable
+- Launch the interactive setup automatically
+
+### Method 2: Interactive Setup (After Manual Clone)
+
+If you've already cloned the repository:
+
+```bash
+# Clone first
+git clone https://github.com/Jakehallmark/Win-Reboot-Project.git
+cd Win-Reboot-Project
+
+# Then run interactive setup
 make interactive
 # OR
 ./scripts/interactive_setup.sh
@@ -80,7 +104,7 @@ make interactive
 
 This will guide you through all steps with prompts.
 
-### Method 2: Manual Step-by-Step
+### Method 3: Manual Step-by-Step
 
 For more control over the process:
 
@@ -143,7 +167,7 @@ sudo reboot
 
 At the GRUB menu, select **"Windows 11 installer (ISO loop)"**
 
-### Method 3: Using Make
+### Method 4: Using Make
 
 ```bash
 # Check dependencies
