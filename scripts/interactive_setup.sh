@@ -78,11 +78,128 @@ check_dependencies() {
   echo ""
 }
 
+# Global cache for build data to avoid repeated API calls
+declare -A BUILD_CACHE_EDITIONS
+declare -A BUILD_CACHE_LANGUAGES
+declare -A BUILD_CACHE_IDS
+
+prefetch_build_data() {
+  msg "Pre-fetching available Windows builds from UUP dump..."
+  echo "  This reduces rate limiting and speeds up the selection process"
+  echo ""
+  
+  # Query common build configurations
+  local -a configs=(
+    "retail:amd64"
+    "rp:amd64"
+    "retail:arm64"
+    "rp:arm64"
+  )
+  
+  local delay=0
+  for config in "${configs[@]}"; do
+    local channel="${config%:*}"
+    local arch="${config#*:}"
+    local cache_key="${channel}_${arch}"
+    
+    # Add increasing delay to avoid rate limiting
+    if [[ $delay -gt 0 ]]; then
+      sleep $delay
+    fi
+    delay=$((delay + 2))
+    
+    echo -n "  Querying ${channel}/${arch}... "
+    
+    local api="https://api.uupdump.net/fetchupd.php?arch=${arch}&ring=${channel}&build=latest"
+    local json
+    json="$(curl -fsSL "$api" 2>&1)" || {
+      echo "failed (network)"
+      continue
+    }
+    
+    local update_id
+    update_id="$(echo "$json" | python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('response',{}).get('updateId',''))" 2>/dev/null)" || {
+      echo "failed (parse)"
+      continue
+    }
+    
+    if [[ -z "$update_id" ]]; then
+      echo "no build found"
+      continue
+    fi
+    
+    BUILD_CACHE_IDS["$cache_key"]="$update_id"
+    echo "found (ID: ${update_id:0:8}...)"
+    
+    # Now fetch editions and languages for this build
+    sleep 3
+    
+    local detail_api="https://api.uupdump.net/get.php?id=${update_id}"
+    local detail_json
+    detail_json="$(curl -fsSL "$detail_api" 2>&1)" || {
+      echo "    Could not fetch details"
+      continue
+    }
+    
+    # Parse both editions and languages in one call
+    local parse_result
+    parse_result="$(echo "$detail_json" | python3 <<'PY'
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    response = data.get("response", {})
+    
+    if "error" in response:
+        sys.exit(1)
+    
+    editions = response.get("editionFancyNames", {})
+    langs = response.get("langList", [])
+    
+    if editions and langs:
+        editions_str = "\n".join(editions.keys())
+        langs_str = "\n".join(langs)
+        print(f"{editions_str}|||{langs_str}")
+except:
+    sys.exit(1)
+PY
+)" || continue
+    
+    # Cache the results
+    local editions="${parse_result%|||*}"
+    local languages="${parse_result#*|||}"
+    
+    if [[ -n "$editions" && -n "$languages" && "$editions" != "$parse_result" ]]; then
+      BUILD_CACHE_EDITIONS["$cache_key"]="$editions"
+      BUILD_CACHE_LANGUAGES["$cache_key"]="$languages"
+      local ed_count=$(echo "$editions" | wc -l)
+      local lang_count=$(echo "$languages" | wc -l)
+      echo "    Cached $ed_count editions, $lang_count languages"
+    fi
+  done
+  
+  echo ""
+  msg "Build data cached successfully"
+  echo ""
+}
+
 query_available_builds() {
   local channel="$1"
   local arch="$2"
   local var_name="$3"  # Variable name to store update ID
+  local cache_key="${channel}_${arch}"
   
+  # Check cache first
+  if [[ -n "${BUILD_CACHE_IDS[$cache_key]}" ]]; then
+    local cached_id="${BUILD_CACHE_IDS[$cache_key]}"
+    echo "  Using cached build: $cached_id"
+    
+    if [[ -n "$var_name" ]]; then
+      eval "$var_name='$cached_id'"
+    fi
+    return 0
+  fi
+  
+  # Cache miss - query API
   msg "Querying available builds from UUP dump..."
   
   local api="https://api.uupdump.net/fetchupd.php?arch=${arch}&ring=${channel}&build=latest"
@@ -106,12 +223,35 @@ query_available_builds() {
   echo "  Found: $build_title"
   echo "  Build ID: $update_id"
   
-  # Store update ID in the named variable
+  # Store in cache and return variable
+  BUILD_CACHE_IDS["$cache_key"]="$update_id"
+  
   if [[ -n "$var_name" ]]; then
     eval "$var_name='$update_id'"
   fi
   
   return 0
+}
+
+get_cached_build_details() {
+  local channel="$1"
+  local arch="$2"
+  local editions_var="$3"
+  local languages_var="$4"
+  local cache_key="${channel}_${arch}"
+  
+  # Return cached data if available
+  if [[ -n "${BUILD_CACHE_EDITIONS[$cache_key]}" && -n "${BUILD_CACHE_LANGUAGES[$cache_key]}" ]]; then
+    if [[ -n "$editions_var" ]]; then
+      eval "$editions_var='${BUILD_CACHE_EDITIONS[$cache_key]}'"
+    fi
+    if [[ -n "$languages_var" ]]; then
+      eval "$languages_var='${BUILD_CACHE_LANGUAGES[$cache_key]}'"
+    fi
+    return 0
+  fi
+  
+  return 1
 }
 
 query_build_details() {
@@ -281,9 +421,14 @@ step_fetch_iso() {
       echo ""
       msg "The following build is available and will be downloaded"
       
-      # Query build details for available editions and languages
+      # Try to get cached build details first (from prefetch)
       local available_editions="" available_languages=""
-      if query_build_details "$captured_update_id" "available_editions" "available_languages"; then
+      if get_cached_build_details "$selected_channel" "$selected_arch" "available_editions" "available_languages"; then
+        echo "  Using cached editions and languages"
+        echo "  Available editions: $(echo "$available_editions" | wc -l) found"
+        echo "  Available languages: $(echo "$available_languages" | wc -l) found"
+      elif query_build_details "$captured_update_id" "available_editions" "available_languages"; then
+        # Fallback to fresh query if not cached
         echo "  Available editions: $(echo "$available_editions" | wc -l) found"
         echo "  Available languages: $(echo "$available_languages" | wc -l) found"
       else
@@ -529,6 +674,7 @@ main() {
   
   intro
   check_dependencies
+  prefetch_build_data  # Cache build data early to avoid rate limits later
   step_fetch_iso
   step_tiny11
   step_grub
