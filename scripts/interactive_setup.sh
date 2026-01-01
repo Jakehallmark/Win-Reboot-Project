@@ -435,29 +435,68 @@ step_fetch_iso() {
     
     # Query what's actually available for selected channel/arch
     local captured_update_id=""
-    if query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
+    if ! query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
+      err "Could not query available builds from UUP dump API"
       echo ""
-      msg "The following build is available and will be downloaded"
-      
-      # Try to get cached build details first (from prefetch)
-      local available_editions="" available_languages=""
-      if get_cached_build_details "$selected_channel" "$selected_arch" "available_editions" "available_languages"; then
-        echo "  Using cached editions and languages"
-        echo "  Available editions: $(echo "$available_editions" | wc -l) found"
-        echo "  Available languages: $(echo "$available_languages" | wc -l) found"
-      elif query_build_details "$captured_update_id" "available_editions" "available_languages"; then
-        # Fallback to fresh query if not cached
-        echo "  Available editions: $(echo "$available_editions" | wc -l) found"
-        echo "  Available languages: $(echo "$available_languages" | wc -l) found"
-      else
-        warn "Could not fetch build details, using default options"
-        available_editions=""
-        available_languages=""
+      echo "This could be due to:"
+      echo "  - Network connectivity issues"
+      echo "  - API rate limiting (wait a few minutes)"
+      echo "  - The selected channel/arch combination is not available"
+      echo ""
+      if ! prompt_yn "Retry the query?"; then
+        err "Cannot proceed without build information"
+        return 1
       fi
+      # Retry once
+      echo ""
+      if ! query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
+        err "Query failed again. Please try again later or check your network connection."
+        return 1
+      fi
+    fi
+    
+    echo ""
+    msg "The following build is available and will be downloaded"
+    
+    # Try to get cached build details first (from prefetch)
+    local available_editions="" available_languages=""
+    if get_cached_build_details "$selected_channel" "$selected_arch" "available_editions" "available_languages"; then
+      echo "  Using cached editions and languages"
+      echo "  Available editions: $(echo "$available_editions" | wc -l) found"
+      echo "  Available languages: $(echo "$available_languages" | wc -l) found"
     else
-      warn "Could not verify available builds, proceeding anyway..."
-      available_editions=""
-      available_languages=""
+      # Not in cache, query fresh with retry
+      local retry_count=0
+      local max_retries=2
+      while [[ $retry_count -lt $max_retries ]]; do
+        if query_build_details "$captured_update_id" "available_editions" "available_languages"; then
+          echo "  Available editions: $(echo "$available_editions" | wc -l) found"
+          echo "  Available languages: $(echo "$available_languages" | wc -l) found"
+          break
+        fi
+        
+        ((retry_count++))
+        if [[ $retry_count -lt $max_retries ]]; then
+          warn "Query failed, waiting 15s before retry $retry_count/$max_retries..."
+          sleep 15
+        fi
+      done
+      
+      # If still failed after retries, abort
+      if [[ -z "$available_editions" || -z "$available_languages" ]]; then
+        err "Could not fetch build details after $max_retries retries"
+        echo ""
+        echo "This is required to show you accurate edition and language options."
+        echo "Without this data, we cannot guarantee the selected combination will work."
+        echo ""
+        echo "Possible causes:"
+        echo "  - UUP dump API is experiencing issues"
+        echo "  - Rate limiting (you may have made too many requests)"
+        echo "  - Network connectivity problems"
+        echo ""
+        echo "Please try again in a few minutes."
+        return 1
+      fi
     fi
     
     echo ""
@@ -470,147 +509,89 @@ step_fetch_iso() {
       fetch_args+=(--update-id "$captured_update_id")
     fi
     
-    # Edition selection
+    # Edition selection (API data only - no fallback)
     echo "Select Edition:"
     
-    if [[ -n "$available_editions" ]]; then
-      # Build dynamic menu from available editions
-      local -a edition_list
-      mapfile -t edition_list <<< "$available_editions"
-      local idx=1
-      local -A edition_map
-      
-      for ed in "${edition_list[@]}"; do
-        echo "  $idx) $ed"
-        edition_map[$idx]="$ed"
-        ((idx++))
-      done
-      echo "  $idx) All editions (includes all above)"
-      edition_map[$idx]="all"
-      
-      echo ""
-      local edition_choice
-      read -r -p "Choice [1-$idx, default 1]: " edition_choice < /dev/tty
-      edition_choice="${edition_choice:-1}"
-      
-      local selected_edition="${edition_map[$edition_choice]}"
-      if [[ "$selected_edition" == "all" ]]; then
-        # Build comma-separated list of all editions
-        selected_edition=$(IFS=,; echo "${edition_list[*]}")
-      fi
-      
-      if [[ -n "$selected_edition" ]]; then
-        fetch_args+=(--edition "$selected_edition")
-      else
-        warn "Invalid choice, using first available edition"
-        fetch_args+=(--edition "${edition_list[0]}")
-      fi
+    # Build dynamic menu from available editions
+    local -a edition_list
+    mapfile -t edition_list <<< "$available_editions"
+    local idx=1
+    local -A edition_map
+    
+    for ed in "${edition_list[@]}"; do
+      echo "  $idx) $ed"
+      edition_map[$idx]="$ed"
+      ((idx++))
+    done
+    echo "  $idx) All editions (includes all above)"
+    edition_map[$idx]="all"
+    
+    echo ""
+    local edition_choice
+    read -r -p "Choice [1-$idx, default 1]: " edition_choice < /dev/tty
+    edition_choice="${edition_choice:-1}"
+    
+    local selected_edition="${edition_map[$edition_choice]}"
+    if [[ "$selected_edition" == "all" ]]; then
+      # Build comma-separated list of all editions
+      selected_edition=$(IFS=,; echo "${edition_list[*]}")
+    fi
+    
+    if [[ -n "$selected_edition" ]]; then
+      fetch_args+=(--edition "$selected_edition")
     else
-      # Fallback to hardcoded list
-      echo "  1) Professional (recommended)"
-      echo "  2) Home"
-      echo "  3) Core (Home without OEM branding)"
-      echo "  4) Enterprise"
-      echo "  5) Education"
-      echo "  6) All editions (includes all above)"
-      echo ""
-      local edition_choice
-      read -r -p "Choice [1-6, default 1]: " edition_choice < /dev/tty
-      edition_choice="${edition_choice:-1}"
-      
-      case "$edition_choice" in
-        1) fetch_args+=(--edition "professional");;
-        2) fetch_args+=(--edition "home");;
-        3) fetch_args+=(--edition "core");;
-        4) fetch_args+=(--edition "enterprise");;
-        5) fetch_args+=(--edition "education");;
-        6) fetch_args+=(--edition "professional,home,core,enterprise,education");;
-        *) warn "Invalid choice, using Professional"; fetch_args+=(--edition "professional");;
-      esac
+      warn "Invalid choice, using first available edition"
+      fetch_args+=(--edition "${edition_list[0]}")
     fi
     
     echo ""
     
-    # Language selection
+    # Language selection (API data only - no fallback)
     echo "Select Language:"
     
-    if [[ -n "$available_languages" ]]; then
-      # Build dynamic menu from available languages
-      local -a lang_list
-      mapfile -t lang_list <<< "$available_languages"
-      local idx=1
-      local -A lang_map
-      
-      # Show first 10 languages
-      local max_show=10
-      local shown=0
-      for lang in "${lang_list[@]}"; do
-        if [[ $shown -lt $max_show ]]; then
-          echo "  $idx) $lang"
-          lang_map[$idx]="$lang"
-          ((idx++))
-          ((shown++))
-        fi
-      done
-      
-      if [[ ${#lang_list[@]} -gt $max_show ]]; then
-        echo "  $idx) Other (enter manually from ${#lang_list[@]} available)"
-        lang_map[$idx]="other"
+    # Build dynamic menu from available languages
+    local -a lang_list
+    mapfile -t lang_list <<< "$available_languages"
+    local idx=1
+    local -A lang_map
+    
+    # Show first 10 languages
+    local max_show=10
+    local shown=0
+    for lang in "${lang_list[@]}"; do
+      if [[ $shown -lt $max_show ]]; then
+        echo "  $idx) $lang"
+        lang_map[$idx]="$lang"
         ((idx++))
+        ((shown++))
       fi
-      
+    done
+    
+    if [[ ${#lang_list[@]} -gt $max_show ]]; then
+      echo "  $idx) Other (enter manually from ${#lang_list[@]} available)"
+      lang_map[$idx]="other"
+      ((idx++))
+    fi
+    
+    echo ""
+    local lang_choice
+    read -r -p "Choice [1-$((idx-1)), default 1]: " lang_choice < /dev/tty
+    lang_choice="${lang_choice:-1}"
+    
+    local selected_lang="${lang_map[$lang_choice]}"
+    if [[ "$selected_lang" == "other" ]]; then
       echo ""
-      local lang_choice
-      read -r -p "Choice [1-$((idx-1)), default 1]: " lang_choice < /dev/tty
-      lang_choice="${lang_choice:-1}"
-      
-      local selected_lang="${lang_map[$lang_choice]}"
-      if [[ "$selected_lang" == "other" ]]; then
-        echo ""
-        echo "Available languages:"
-        printf "  %s\n" "${lang_list[@]}"
-        echo ""
-        read -r -p "Enter language code: " selected_lang < /dev/tty
-      fi
-      
-      if [[ -n "$selected_lang" && "$selected_lang" != "other" ]]; then
-        fetch_args+=(--lang "$selected_lang")
-      else
-        warn "Invalid choice, using ${lang_list[0]}"
-        fetch_args+=(--lang "${lang_list[0]}")
-      fi
+      echo "Available languages:"
+      printf "  %s\n" "${lang_list[@]}"
+      echo ""
+      read -r -p "Enter language code: " selected_lang < /dev/tty
+    fi
+    
+    if [[ -n "$selected_lang" && "$selected_lang" != "other" ]]; then
+      fetch_args+=(--lang "$selected_lang")
     else
-      # Fallback to hardcoded list
-      echo "  1) en-us (English - United States)"
-      echo "  2) en-gb (English - United Kingdom)"
-      echo "  3) es-es (Spanish - Spain)"
-      echo "  4) fr-fr (French - France)"
-      echo "  5) de-de (German - Germany)"
-      echo "  6) pt-br (Portuguese - Brazil)"
-      echo "  7) zh-cn (Chinese - Simplified)"
-      echo "  8) ja-jp (Japanese)"
-      echo "  9) Other (enter manually)"
-      echo ""
-      local lang_choice
-      read -r -p "Choice [1-9, default 1]: " lang_choice < /dev/tty
-      lang_choice="${lang_choice:-1}"
-      
-      case "$lang_choice" in
-        1) fetch_args+=(--lang "en-us");;
-        2) fetch_args+=(--lang "en-gb");;
-        3) fetch_args+=(--lang "es-es");;
-        4) fetch_args+=(--lang "fr-fr");;
-        5) fetch_args+=(--lang "de-de");;
-        6) fetch_args+=(--lang "pt-br");;
-        7) fetch_args+=(--lang "zh-cn");;
-        8) fetch_args+=(--lang "ja-jp");;
-        9) 
-          local custom_lang
-          read -r -p "Enter language code (e.g., it-it): " custom_lang < /dev/tty
-          fetch_args+=(--lang "$custom_lang")
-          ;;
-        *) warn "Invalid choice, using en-us"; fetch_args+=(--lang "en-us");;
-      esac
+      warn "Invalid choice, using ${lang_list[0]}"
+      fetch_args+=(--lang "${lang_list[0]}")
     fi
     
     echo ""
