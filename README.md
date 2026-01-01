@@ -1,6 +1,8 @@
 Win-Reboot-Project
 ==================
 
+**Version 1.0.0**
+
 Tooling to download a fresh, official Windows 11 ISO from Microsoft via UUP dump, optionally apply Tiny11-style trimming on Linux, and add a GRUB menu entry to boot straight into the installer (no USB). Secure Boot must be off for the GRUB loopback flow.
 
 Status
@@ -37,20 +39,31 @@ Safety notes
 - Double-check `/etc/default/grub` and target disk; GRUB edits are host-wide.
 - Secure Boot must be disabled for the GRUB chainloader. If chainload fails, consider wimboot/iPXE as a fallback (not implemented here).
 
-Quickstart (interactive defaults)
----------------------------------
-```
+Quickstart
+----------
+```bash
+# Interactive mode (recommended for first-time users)
+./scripts/interactive_setup.sh
+
+# OR Manual step-by-step:
+
+# 0) Check dependencies
+./scripts/check_deps.sh
+
 # 1) Download latest public Win11 ISO (Retail, x64, en-US by default)
 ./scripts/fetch_iso.sh
 
 # 2) Optional: apply Tiny11-style trimming with prompts
-./scripts/tiny11.sh out/win11.iso
+./scripts/tiny11.sh out/win11.iso --preset minimal
 
 # 3) Add GRUB entry (copies ISO to /boot/win11.iso) and regenerate grub.cfg
 sudo ./scripts/grub_entry.sh out/win11.iso
 
 # 4) Reboot into installer (after reviewing grub.cfg)
 sudo ./scripts/reboot_to_installer.sh
+
+# OR using Make:
+make check && make fetch && make trim && sudo make grub
 ```
 
 Testing / dry runs
@@ -59,7 +72,40 @@ Testing / dry runs
 - `grub_entry.sh` uses `grub-script-check` when available before touching grub.cfg.
 - Consider mounting `out/win11.iso` and `boot.wim` with 7z/wimlib to verify structure before GRUB changes.
 
-Next steps
-----------
-- Harden preset removal lists by diffing Tiny11Builder outputs.
-- Add distro-specific Secure Boot guidance and wimboot fallback.
+Available scripts
+-----------------
+- **fetch_iso.sh** - Download Windows 11 ISO from Microsoft via UUP dump
+- **tiny11.sh** - Apply Tiny11-style trimming to reduce ISO size
+- **grub_entry.sh** - Add GRUB bootloader entry for the installer
+- **reboot_to_installer.sh** - Reboot directly to the Windows installer
+- **check_deps.sh** - Verify all required dependencies are installed
+- **interactive_setup.sh** - Guided setup wizard (recommended for new users)
+- **cleanup.sh** - Remove temporary files and optionally GRUB entries
+
+Cleanup
+-------
+```bash
+# Clean temporary files only
+./scripts/cleanup.sh
+
+# Remove ISOs from out/ directory
+./scripts/cleanup.sh --iso
+
+# Remove GRUB entry (requires root)
+sudo ./scripts/cleanup.sh --grub
+
+# Remove everything
+sudo ./scripts/cleanup.sh --all
+```
+
+Documentation
+-------------
+- [INSTALL.md](INSTALL.md) - Comprehensive installation guide
+- [data/removal-presets/](data/removal-presets/) - Tiny11 removal preset files
+
+Next steps (development)
+------------------------
+- Add distro-specific Secure Boot guidance and wimboot fallback
+- Test on more Linux distributions
+- Add support for Windows 10 ISOs
+- Implement alternative boot methods (wimboot/iPXE)

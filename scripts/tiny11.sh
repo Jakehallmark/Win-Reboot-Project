@@ -35,20 +35,26 @@ require_cmd() {
 }
 
 parse_args() {
-  if [[ -z "$ISO_IN" ]]; then
-    usage; err "ISO path is required"
-  fi
-  shift || true
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      -h|--help) usage; exit 0;;
       --preset) PRESET="$2"; shift 2;;
       --image-index) IMAGE_INDEX="$2"; shift 2;;
       --custom-list) CUSTOM_LIST="$2"; shift 2;;
       --skip-reg) SKIP_REG=1; shift;;
-      -h|--help) usage; exit 0;;
-      *) err "Unknown arg: $1";;
+      *)
+        if [[ -z "$ISO_IN" ]]; then
+          ISO_IN="$1"; shift
+        else
+          err "Unknown arg: $1"
+        fi
+        ;;
     esac
   done
+  
+  if [[ -z "$ISO_IN" ]]; then
+    usage; err "ISO path is required"
+  fi
 }
 
 load_list() {
