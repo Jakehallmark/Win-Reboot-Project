@@ -122,14 +122,32 @@ query_build_details() {
   msg "Querying available editions and languages..."
   
   # Add delay to avoid rate limiting
-  sleep 2
+  sleep 3
   
   local api="https://api.uupdump.net/get.php?id=${update_id}"
   local json
   json="$(curl -fsSL "$api" 2>&1)" || {
-    warn "Could not query build details"
+    warn "Could not query build details (network error)"
     return 1
   }
+  
+  # Check for rate limiting or errors
+  if echo "$json" | grep -qi "rate.limited\|error"; then
+    local error_msg
+    error_msg="$(echo "$json" | python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('response',{}).get('error','unknown'))" 2>/dev/null || echo "unknown")"
+    warn "API Error: $error_msg"
+    if [[ "$error_msg" == *"RATE_LIMITED"* ]]; then
+      echo "  Waiting 5 seconds for rate limit..."
+      sleep 5
+      # Retry once
+      json="$(curl -fsSL "$api" 2>&1)" || {
+        warn "Retry failed"
+        return 1
+      }
+    else
+      return 1
+    fi
+  fi
   
   # Parse available editions and languages
   local editions languages
@@ -140,17 +158,22 @@ try:
     response = data.get("response", {})
     
     if "error" in response:
+        print(f"API Error: {response['error']}", file=sys.stderr)
         sys.exit(1)
     
     editions = response.get("editionFancyNames", {})
-    if editions:
-        for ed in editions.keys():
-            print(ed)
-except:
+    if not editions:
+        print("No editions found", file=sys.stderr)
+        sys.exit(1)
+        
+    for ed in editions.keys():
+        print(ed)
+except Exception as e:
+    print(f"Parse error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
 )" || {
-    warn "Could not parse editions"
+    warn "Could not parse editions from API response"
     return 1
   }
   
@@ -164,14 +187,18 @@ try:
         sys.exit(1)
     
     langs = response.get("langList", [])
-    if langs:
-        for lang in langs:
-            print(lang)
-except:
+    if not langs:
+        print("No languages found", file=sys.stderr)
+        sys.exit(1)
+        
+    for lang in langs:
+        print(lang)
+except Exception as e:
+    print(f"Parse error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
 )" || {
-    warn "Could not parse languages"
+    warn "Could not parse languages from API response"
     return 1
   }
   
@@ -184,7 +211,12 @@ PY
     eval "$languages_var='$languages'"
   fi
   
-  [[ -n "$editions" && -n "$languages" ]]
+  if [[ -n "$editions" && -n "$languages" ]]; then
+    return 0
+  else
+    warn "Incomplete data received from API"
+    return 1
+  fi
 }
 
 step_fetch_iso() {
