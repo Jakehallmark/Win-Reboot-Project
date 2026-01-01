@@ -336,14 +336,15 @@ try:
     
     # Get editions
     editions = response.get("editionFancyNames", {})
+    langs = response.get("langList", [])
+    
+    # Check if this is an Insider build (no edition/language selection available)
+    if not editions or not langs:
+        print("INSIDER_BUILD")
+        sys.exit(0)
+    
     if not editions:
         print("No editions found in API response", file=sys.stderr)
-        sys.exit(1)
-    
-    # Get languages
-    langs = response.get("langList", [])
-    if not langs:
-        print("No languages found in API response", file=sys.stderr)
         sys.exit(1)
     
     # Output format: EDITIONS|||LANGUAGES
@@ -369,6 +370,12 @@ PY
     return 1
   }
   rm -f "$parse_error"
+  
+  # Check if this is an Insider build
+  if [[ "$parse_result" == "INSIDER_BUILD" ]]; then
+    echo "INSIDER_BUILD"
+    return 0
+  fi
   
   # Split the result into editions and languages
   local editions="${parse_result%|||*}"
@@ -483,20 +490,31 @@ step_fetch_iso() {
     msg "The following build is available and will be downloaded"
     
     # Try to get cached build details first (from prefetch)
-    local available_editions="" available_languages=""
+    local available_editions="" available_languages="" is_insider_build="false"
     if get_cached_build_details "$selected_channel" "$selected_arch" "available_editions" "available_languages"; then
       echo "  Using cached editions and languages"
-      echo "  Available editions: $(echo "$available_editions" | wc -l) found"
-      echo "  Available languages: $(echo "$available_languages" | wc -l) found"
+      if [[ -n "$available_editions" && -n "$available_languages" ]]; then
+        echo "  Available editions: $(echo "$available_editions" | wc -l) found"
+        echo "  Available languages: $(echo "$available_languages" | wc -l) found"
+      fi
     else
       # Not in cache, query fresh with retry
       local retry_count=0
       local max_retries=2
       while [[ $retry_count -lt $max_retries ]]; do
-        if query_build_details "$captured_update_id" "available_editions" "available_languages"; then
-          echo "  Available editions: $(echo "$available_editions" | wc -l) found"
-          echo "  Available languages: $(echo "$available_languages" | wc -l) found"
-          break
+        local result
+        result=$(query_build_details "$captured_update_id" "available_editions" "available_languages")
+        if [[ $? -eq 0 ]]; then
+          # Check if it's an Insider build
+          if [[ "$result" == "INSIDER_BUILD" ]]; then
+            is_insider_build="true"
+            echo "  This is an Insider Preview build (single edition, single language)"
+            break
+          elif [[ -n "$available_editions" && -n "$available_languages" ]]; then
+            echo "  Available editions: $(echo "$available_editions" | wc -l) found"
+            echo "  Available languages: $(echo "$available_languages" | wc -l) found"
+            break
+          fi
         fi
         
         ((retry_count++))
@@ -506,8 +524,8 @@ step_fetch_iso() {
         fi
       done
       
-      # If still failed after retries, abort
-      if [[ -z "$available_editions" || -z "$available_languages" ]]; then
+      # If still failed and not Insider build, abort
+      if [[ "$is_insider_build" != "true" && (-z "$available_editions" || -z "$available_languages") ]]; then
         err "Could not fetch build details after $max_retries retries"
         echo ""
         echo "This is required to show you accurate edition and language options."
@@ -523,111 +541,119 @@ step_fetch_iso() {
       fi
     fi
     
-    echo ""
-    
-    fetch_args+=(--channel "$selected_channel")
-    fetch_args+=(--arch "$selected_arch")
-    
-    # If we got an update ID, use it to avoid re-querying API
-    if [[ -n "$captured_update_id" ]]; then
-      fetch_args+=(--update-id "$captured_update_id")
-    fi
-    
-    # Edition selection (API data only - no fallback)
-    echo "Select Edition:"
-    
-    # Build dynamic menu from available editions
-    local -a edition_list
-    mapfile -t edition_list <<< "$available_editions"
-    local idx=1
-    local -A edition_map
-    
-    for ed in "${edition_list[@]}"; do
-      echo "  $idx) $ed"
-      edition_map[$idx]="$ed"
-      ((idx++))
-    done
-    echo "  $idx) All editions (includes all above)"
-    edition_map[$idx]="all"
-    
-    echo ""
-    local edition_choice
-    read -r -p "Choice [1-$idx, default 1]: " edition_choice < /dev/tty
-    edition_choice="${edition_choice:-1}"
-    
-    local selected_edition="${edition_map[$edition_choice]}"
-    if [[ "$selected_edition" == "all" ]]; then
-      # Build comma-separated list of all editions
-      selected_edition=$(IFS=,; echo "${edition_list[*]}")
-    fi
-    
-    if [[ -n "$selected_edition" ]]; then
-      fetch_args+=(--edition "$selected_edition")
-    else
-      warn "Invalid choice, using first available edition"
-      fetch_args+=(--edition "${edition_list[0]}")
-    fi
-    
-    echo ""
-    
-    # Language selection (API data only - no fallback)
-    echo "Select Language:"
-    
-    # Build dynamic menu from available languages
-    local -a lang_list
-    mapfile -t lang_list <<< "$available_languages"
-    local idx=1
-    local -A lang_map
-    
-    # Show first 10 languages
-    local max_show=10
-    local shown=0
-    for lang in "${lang_list[@]}"; do
-      if [[ $shown -lt $max_show ]]; then
-        echo "  $idx) $lang"
-        lang_map[$idx]="$lang"
-        ((idx++))
-        ((shown++))
+    # Skip edition/language selection for Insider builds
+    if [[ "$is_insider_build" == "true" ]]; then
+      echo ""
+      echo "Since this is an Insider Preview build, edition and language are pre-configured."
+      echo "Proceeding with default settings..."
+      echo ""
+      fetch_args+=(--channel "$selected_channel")
+      fetch_args+=(--arch "$selected_arch")
+      if [[ -n "$captured_update_id" ]]; then
+        fetch_args+=(--update-id "$captured_update_id")
       fi
-    done
-    
-    if [[ ${#lang_list[@]} -gt $max_show ]]; then
-      echo "  $idx) Other (enter manually from ${#lang_list[@]} available)"
-      lang_map[$idx]="other"
-      ((idx++))
-    fi
-    
-    echo ""
-    local lang_choice
-    read -r -p "Choice [1-$((idx-1)), default 1]: " lang_choice < /dev/tty
-    lang_choice="${lang_choice:-1}"
-    
-    local selected_lang="${lang_map[$lang_choice]}"
-    if [[ "$selected_lang" == "other" ]]; then
+      msg "Configured settings: ${fetch_args[*]}"
       echo ""
-      echo "Available languages:"
-      printf "  %s\n" "${lang_list[@]}"
-      echo ""
-      read -r -p "Enter language code: " selected_lang < /dev/tty
-    fi
-    
-    if [[ -n "$selected_lang" && "$selected_lang" != "other" ]]; then
-      fetch_args+=(--lang "$selected_lang")
     else
-      warn "Invalid choice, using ${lang_list[0]}"
-      fetch_args+=(--lang "${lang_list[0]}")
+      echo ""
+      fetch_args+=(--channel "$selected_channel")
+      fetch_args+=(--arch "$selected_arch")
+      if [[ -n "$captured_update_id" ]]; then
+        fetch_args+=(--update-id "$captured_update_id")
+      fi
+      
+      # Edition selection (API data only)
+      echo "Select Edition:"
+    
+      # Build dynamic menu from available editions
+      local -a edition_list
+      mapfile -t edition_list <<< "$available_editions"
+      local idx=1
+      local -A edition_map
+      
+      for ed in "${edition_list[@]}"; do
+        echo "  $idx) $ed"
+        edition_map[$idx]="$ed"
+        ((idx++))
+      done
+      echo "  $idx) All editions (includes all above)"
+      edition_map[$idx]="all"
+      
+      echo ""
+      local edition_choice
+      read -r -p "Choice [1-$idx, default 1]: " edition_choice < /dev/tty
+      edition_choice="${edition_choice:-1}"
+      
+      local selected_edition="${edition_map[$edition_choice]}"
+      if [[ "$selected_edition" == "all" ]]; then
+        # Build comma-separated list of all editions
+        selected_edition=$(IFS=,; echo "${edition_list[*]}")
+      fi
+      
+      if [[ -n "$selected_edition" ]]; then
+        fetch_args+=(--edition "$selected_edition")
+      else
+        warn "Invalid choice, using first available edition"
+        fetch_args+=(--edition "${edition_list[0]}")
+      fi
+      
+      echo ""
+      
+      # Language selection (API data only)
+      echo "Select Language:"
+    
+      # Build dynamic menu from available languages
+      local -a lang_list
+      mapfile -t lang_list <<< "$available_languages"
+      local idx=1
+      local -A lang_map
+      
+      # Show first 10 languages
+      local max_show=10
+      local shown=0
+      for lang in "${lang_list[@]}"; do
+        if [[ $shown -lt $max_show ]]; then
+          echo "  $idx) $lang"
+          lang_map[$idx]="$lang"
+          ((idx++))
+          ((shown++))
+        fi
+      done
+      
+      if [[ ${#lang_list[@]} -gt $max_show ]]; then
+        echo "  $idx) Other (enter manually from ${#lang_list[@]} available)"
+        lang_map[$idx]="other"
+        ((idx++))
+      fi
+      
+      echo ""
+      local lang_choice
+      read -r -p "Choice [1-$((idx-1)), default 1]: " lang_choice < /dev/tty
+      lang_choice="${lang_choice:-1}"
+      
+      local selected_lang="${lang_map[$lang_choice]}"
+      if [[ "$selected_lang" == "other" ]]; then
+        echo ""
+        echo "Available languages:"
+        printf "  %s\n" "${lang_list[@]}"
+        echo ""
+        read -r -p "Enter language code: " selected_lang < /dev/tty
+      fi
+      
+      if [[ -n "$selected_lang" && "$selected_lang" != "other" ]]; then
+        fetch_args+=(--lang "$selected_lang")
+      else
+        warn "Invalid choice, using ${lang_list[0]}"
+        fetch_args+=(--lang "${lang_list[0]}")
+      fi
+      
+      echo ""
+      msg "Configured settings: ${fetch_args[*]}"
+      echo ""
+    fi
     fi
     
     echo ""
-    msg "Configured settings: ${fetch_args[*]}"
-    echo ""
-  fi
-  
-  if ! "$SCRIPT_DIR/fetch_iso.sh" "${fetch_args[@]}"; then
-    fatal_error "ISO download failed" 20 \
-      "Check network connection and disk space. See error messages above."
-  fi
-  echo ""
 }
 
 step_tiny11() {
