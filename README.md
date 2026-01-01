@@ -27,11 +27,25 @@ High-level flow
 3. `scripts/grub_entry.sh` — Copy ISO to `/boot/win11.iso`, add GRUB menu entry to chainload the installer, regenerate grub.cfg.
 4. `scripts/reboot_to_installer.sh` — Sanity checks and reboot into the new GRUB entry.
 
-Tiny11 references
------------------
-- Based on `ntdevlabs/tiny11builder` PowerShell flow; this repo does not ship their scripts.
-- Presets live in `data/removal-presets/*.txt` and are intentionally conservative to keep OOBE/activation working.
-- Uses `wimlib-imagex mount` to edit the image and optional registry tweaks via `hivexregedit`/`reged`.
+Tiny11 Attribution
+------------------
+**This project is inspired by and based on the excellent work of the [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by ntdevlabs.**
+
+🎉 **Kudos to ntdevlabs** for their pioneering work in creating lightweight, bloat-free Windows 11 installations! Their Tiny11Builder provided the foundation and methodology that made this Linux-based implementation possible.
+
+### Our Implementation
+- Adapts the Tiny11Builder PowerShell workflow to pure bash for Linux systems
+- Uses `wimlib-imagex` for WIM manipulation instead of DISM
+- Presets in `data/removal-presets/*.txt` are inspired by Tiny11's conservative approach
+- Maintains OOBE/activation compatibility through careful component selection
+- Implements registry tweaks for TPM/Secure Boot bypass similar to Tiny11's methods
+
+### Key Differences
+- **Platform**: Linux native (bash) vs Windows (PowerShell)
+- **Distribution**: GRUB chainload vs USB/ISO boot
+- **Automation**: Full CLI automation with interactive mode
+
+**Please visit and support the original Tiny11 project**: https://github.com/ntdevlabs/tiny11builder
 
 Safety notes
 ------------
@@ -101,7 +115,24 @@ sudo ./scripts/cleanup.sh --all
 Documentation
 -------------
 - [INSTALL.md](INSTALL.md) - Comprehensive installation guide
+- [QUICKREF.md](QUICKREF.md) - Quick reference card
+- [CREDITS.md](CREDITS.md) - Credits and acknowledgments
 - [data/removal-presets/](data/removal-presets/) - Tiny11 removal preset files
+
+Credits & Acknowledgments
+-------------------------
+**Tiny11 Project** - https://github.com/ntdevlabs/tiny11builder
+- Created by ntdevlabs
+- Original concept and methodology for Windows 11 debloating
+- Inspiration for this Linux implementation
+
+**UUP Dump** - https://uupdump.net
+- Community-driven Windows update retrieval service
+- Enables direct downloads from Microsoft CDN
+
+**wimlib** - https://wimlib.net
+- Cross-platform WIM manipulation library
+- Essential for Linux-based Windows image editing
 
 Next steps (development)
 ------------------------

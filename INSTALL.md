@@ -2,6 +2,22 @@
 
 This guide walks through the complete installation process for Win-Reboot-Project.
 
+## About This Project
+
+**Win-Reboot-Project** adapts the methodology from the excellent [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by **ntdevlabs** to work natively on Linux systems. 
+
+### 🙏 Special Thanks to Tiny11
+
+We owe a huge debt of gratitude to **ntdevlabs** and the Tiny11 community for:
+- Pioneering the lightweight Windows 11 approach
+- Documenting safe component removal strategies
+- Sharing their expertise with the community
+- Creating tools that inspired this Linux-native implementation
+
+**If you find this project useful, please also check out and support the original Tiny11 project!**
+
+---
+
 ## Prerequisites Check
 
 Before starting, verify your system meets the requirements:
@@ -10,7 +26,7 @@ Before starting, verify your system meets the requirements:
 - **Linux distribution** with GRUB bootloader
 - **UEFI firmware** (BIOS mode not supported for loopback)
 - **Secure Boot disabled** (required for GRUB chainloading)
-- **~15-20 GB free disk space**
+- **~3git 0 GB free disk space**
   - `~/Win-Reboot-Project/out`: 5-6 GB (ISO storage)
   - `~/Win-Reboot-Project/tmp`: 8-10 GB (temporary working files)
   - `/boot`: 5-6 GB (installer ISO copy)

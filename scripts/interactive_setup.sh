@@ -30,6 +30,7 @@ intro() {
   cat <<'EOF'
 ╔═══════════════════════════════════════════════════════════════╗
 ║           Win-Reboot-Project Interactive Setup                ║
+║        Inspired by the Tiny11 Project by ntdevlabs            ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 This will:
@@ -43,6 +44,10 @@ This will:
   - This modifies your GRUB configuration
   - The Windows installer can wipe your disk
   - Test in a VM first!
+
+💡 Tiny11 Credit: This project adapts the excellent methodology from
+   ntdevlabs' Tiny11 project for use on Linux systems.
+   Visit: https://github.com/ntdevlabs/tiny11builder
 
 EOF
   prompt_yn "Continue?" "n" || exit 0
