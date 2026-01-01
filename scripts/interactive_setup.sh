@@ -681,9 +681,10 @@ step_tiny11() {
   msg "Step 2: Apply Tiny11 trimming (optional)"
   echo ""
   echo "Presets:"
-  echo "  minimal - Conservative app removals (recommended)"
-  echo "  lite    - More aggressive removals"
-  echo "  vanilla - No modifications (skip this step)"
+  echo "  minimal - Removes inbox consumer apps (News/Weather/Bing/Office hub/Teams/Clipchamp/QuickAssist/YourPhone/Xbox apps/OneDrive installer); keeps Store, Defender, BitLocker, .NET, printing, RDP"
+  echo "  lite    - minimal plus removes WinRE/Help/WinRE config, Media Player, Quick Assist, Mixed Reality, OneDrive packages (more aggressive, fewer recovery/help tools)"
+  echo "  aggressive - minimal plus Photos/Maps/Camera/Alarms/Calculator/Paint/Snipping/Voice Recorder, Xbox system apps, Cortana remnants (heavier debloat; keep if you don't need those apps)"
+  echo "  vanilla - No changes (skip trimming)"
   echo ""
   
   prompt_yn "Apply Tiny11 trimming?" "y" || {

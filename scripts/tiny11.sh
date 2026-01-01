@@ -13,7 +13,8 @@ source "$SCRIPT_DIR/lib_error.sh" 2>/dev/null || {
   exit 1
 }
 
-ISO_IN="${1:-}"
+# Set defaults; parse_args assigns ISO_IN from CLI
+ISO_IN=""
 PRESET="minimal" # minimal|lite|vanilla
 IMAGE_INDEX=1
 OUT_ISO="${OUT_ISO:-$ROOT_DIR/out/win11-tiny.iso}"
@@ -32,6 +33,7 @@ EOF
 
 msg() { echo "[+] $*"; }
 warn() { echo "[!] $*" >&2; }
+err() { echo "[!] $*" >&2; }
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
