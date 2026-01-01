@@ -54,7 +54,7 @@ detect_latest_update_id() {
   require_commands curl python3
   check_network "https://api.uupdump.net"
   
-  local api="https://api.uupdump.net/listbuilds.php?arch=${ARCH}&ring=${CHANNEL}&search=Windows%2011"
+  local api="https://api.uupdump.net/fetchupd.php?arch=${ARCH}&ring=${CHANNEL}&build=latest"
   msg "Querying UUP dump for latest Windows 11 (${CHANNEL}/${ARCH})"
   
   local json
@@ -65,10 +65,11 @@ detect_latest_update_id() {
 import json,sys
 try:
     data=json.loads(sys.stdin.read())
-    builds=data.get("builds",[])
-    if not builds:
+    response=data.get("response",{})
+    update_id=response.get("updateId","")
+    if not update_id:
         sys.exit(1)
-    print(builds[0].get("uuid",""))
+    print(update_id)
 except Exception as e:
     print(f"Error parsing JSON: {e}", file=sys.stderr)
     sys.exit(1)
