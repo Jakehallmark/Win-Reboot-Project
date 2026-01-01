@@ -93,13 +93,116 @@ step_fetch_iso() {
   echo "  Edition: Professional (default)"
   echo "  Language: en-us (default)"
   echo "  Architecture: x64 (amd64)"
+  echo "  Channel: Retail (stable release)"
   echo ""
   
-  prompt_yn "Use default settings?" "y" || {
-    warn "Custom settings not implemented in interactive mode. Edit fetch_iso.sh args manually."
-  }
+  local fetch_args=()
   
-  if ! "$SCRIPT_DIR/fetch_iso.sh"; then
+  if prompt_yn "Use default settings?" "y"; then
+    # Use defaults - no extra args needed
+    :
+  else
+    # Custom settings
+    echo ""
+    msg "Custom ISO Settings"
+    echo ""
+    
+    # Edition selection
+    echo "Select Edition:"
+    echo "  1) Professional (recommended)"
+    echo "  2) Home"
+    echo "  3) Core (Home without OEM branding)"
+    echo "  4) Enterprise"
+    echo "  5) Education"
+    echo ""
+    local edition_choice
+    read -r -p "Choice [1-5, default 1]: " edition_choice < /dev/tty
+    edition_choice="${edition_choice:-1}"
+    
+    case "$edition_choice" in
+      1) fetch_args+=(--edition "professional");;
+      2) fetch_args+=(--edition "home");;
+      3) fetch_args+=(--edition "core");;
+      4) fetch_args+=(--edition "enterprise");;
+      5) fetch_args+=(--edition "education");;
+      *) warn "Invalid choice, using Professional"; fetch_args+=(--edition "professional");;
+    esac
+    
+    echo ""
+    
+    # Language selection
+    echo "Select Language:"
+    echo "  1) en-us (English - United States)"
+    echo "  2) en-gb (English - United Kingdom)"
+    echo "  3) es-es (Spanish - Spain)"
+    echo "  4) fr-fr (French - France)"
+    echo "  5) de-de (German - Germany)"
+    echo "  6) pt-br (Portuguese - Brazil)"
+    echo "  7) zh-cn (Chinese - Simplified)"
+    echo "  8) ja-jp (Japanese)"
+    echo "  9) Other (enter manually)"
+    echo ""
+    local lang_choice
+    read -r -p "Choice [1-9, default 1]: " lang_choice < /dev/tty
+    lang_choice="${lang_choice:-1}"
+    
+    case "$lang_choice" in
+      1) fetch_args+=(--lang "en-us");;
+      2) fetch_args+=(--lang "en-gb");;
+      3) fetch_args+=(--lang "es-es");;
+      4) fetch_args+=(--lang "fr-fr");;
+      5) fetch_args+=(--lang "de-de");;
+      6) fetch_args+=(--lang "pt-br");;
+      7) fetch_args+=(--lang "zh-cn");;
+      8) fetch_args+=(--lang "ja-jp");;
+      9) 
+        local custom_lang
+        read -r -p "Enter language code (e.g., it-it): " custom_lang < /dev/tty
+        fetch_args+=(--lang "$custom_lang")
+        ;;
+      *) warn "Invalid choice, using en-us"; fetch_args+=(--lang "en-us");;
+    esac
+    
+    echo ""
+    
+    # Architecture selection
+    echo "Select Architecture:"
+    echo "  1) x64 (amd64) - 64-bit Intel/AMD"
+    echo "  2) arm64 - 64-bit ARM (for ARM devices)"
+    echo ""
+    local arch_choice
+    read -r -p "Choice [1-2, default 1]: " arch_choice < /dev/tty
+    arch_choice="${arch_choice:-1}"
+    
+    case "$arch_choice" in
+      1) fetch_args+=(--arch "amd64");;
+      2) fetch_args+=(--arch "arm64");;
+      *) warn "Invalid choice, using amd64"; fetch_args+=(--arch "amd64");;
+    esac
+    
+    echo ""
+    
+    # Channel selection
+    echo "Select Release Channel:"
+    echo "  1) Retail (stable, recommended)"
+    echo "  2) Release Preview (pre-release testing)"
+    echo ""
+    local channel_choice
+    read -r -p "Choice [1-2, default 1]: " channel_choice < /dev/tty
+    channel_choice="${channel_choice:-1}"
+    
+    case "$channel_choice" in
+      1) fetch_args+=(--channel "retail");;
+      2) fetch_args+=(--channel "rp");;
+      *) warn "Invalid choice, using retail"; fetch_args+=(--channel "retail");;
+    esac
+    
+    echo ""
+    msg "Configured settings: ${fetch_args[*]}"
+    echo ""
+  fi
+  
+  if ! "$SCRIPT_DIR/fetch_iso.sh" "${fetch_args[@]}"; then
     fatal_error "ISO download failed" 20 \
       "Check network connection and disk space. See error messages above."
   fi
