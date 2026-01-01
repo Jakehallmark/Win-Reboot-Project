@@ -142,6 +142,12 @@ prefetch_build_data() {
       continue
     }
     
+    # Check if response is empty
+    if [[ -z "$detail_json" ]]; then
+      echo "    API returned empty response (rate limiting or connection issue)"
+      continue
+    fi
+    
     # Check for rate limit error or API errors
     if echo "$detail_json" | grep -qi "rate.limited\|RATE_LIMIT"; then
       echo "    Rate limited - skipping details for this build"
@@ -160,7 +166,12 @@ prefetch_build_data() {
     parse_result="$(echo "$detail_json" | python3 <<'PY'
 import json, sys
 try:
-    data = json.load(sys.stdin)
+    input_data = sys.stdin.read().strip()
+    if not input_data:
+        print("Empty API response", file=sys.stderr)
+        sys.exit(1)
+    
+    data = json.loads(input_data)
     response = data.get("response", {})
     
     # Check for API errors
@@ -309,6 +320,12 @@ query_build_details() {
     return 1
   }
   
+  # Check if response is empty
+  if [[ -z "$json" ]]; then
+    warn "API returned empty response (rate limiting or connection issue)"
+    return 1
+  fi
+  
   # Check for rate limiting or errors
   local json_size=${#json}
   if [[ $json_size -lt 100 ]]; then
@@ -327,7 +344,12 @@ query_build_details() {
   parse_result="$(echo "$json" | python3 <<'PY' 2>"$parse_error"
 import json, sys
 try:
-    data = json.load(sys.stdin)
+    input_data = sys.stdin.read().strip()
+    if not input_data:
+        print("Empty API response", file=sys.stderr)
+        sys.exit(1)
+    
+    data = json.loads(input_data)
     response = data.get("response", {})
     
     if "error" in response:
