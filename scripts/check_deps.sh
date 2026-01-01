@@ -281,8 +281,28 @@ main() {
   
   # Try auto-install if requested
   if [[ $AUTO_INSTALL -eq 1 ]]; then
+    echo ""
+    msg "Missing ${#MISSING[@]} package(s), attempting automatic installation..."
+    echo ""
     if auto_install_dependencies; then
+      echo ""
       msg "Dependencies installed successfully!"
+      msg "Re-checking dependencies..."
+      echo ""
+      # Re-check to verify installation
+      MISSING=()
+      check_cmd "aria2c" "aria2"
+      check_cmd "cabextract" "cabextract"
+      check_cmd "wimlib-imagex" "wimtools/wimlib"
+      check_cmd "7z" "p7zip"
+      check_cmd "curl" "curl"
+      check_cmd "python3" "python3"
+      check_cmd "unzip" "unzip"
+      
+      if [[ ${#MISSING[@]} -gt 0 ]]; then
+        warn "Some packages still missing after installation attempt"
+        return 1
+      fi
       return 0
     else
       warn "Auto-install failed or was declined"
