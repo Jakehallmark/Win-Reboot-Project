@@ -302,7 +302,7 @@ query_build_details() {
   local parse_error
   parse_error=$(mktemp)
   local langs_list
-  langs_list="$(echo "$langs_json" | python3 <<'PY' 2>"$parse_error"
+  langs_list="$(python3 - <<'PY' 2>"$parse_error" <<<"$langs_json"
 import json, sys
 try:
     input_data = sys.stdin.read().strip()
@@ -336,7 +336,7 @@ except Exception as e:
     print(f"Parse error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
-)" 2>"$parse_error" || {
+)" || {
     local err_msg=$(cat "$parse_error" 2>/dev/null)
     log_uup_issue "listlangs parse error for ${update_id}" "Error: ${err_msg}\nResponse:\n${langs_json}"
     if [[ "$err_msg" == *"INSIDER_BUILD"* ]]; then
@@ -380,7 +380,7 @@ PY
   # Parse editions response
   parse_error=$(mktemp)
   local eds_list
-  eds_list="$(echo "$eds_json" | python3 <<'PY' 2>"$parse_error"
+  eds_list="$(python3 - <<'PY' 2>"$parse_error" <<<"$eds_json"
 import json, sys
 try:
     input_data = sys.stdin.read().strip()
@@ -414,7 +414,7 @@ except Exception as e:
     print(f"Parse error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
-)" 2>"$parse_error" || {
+)" || {
     local err_msg=$(cat "$parse_error" 2>/dev/null)
     log_uup_issue "listeditions parse error for ${update_id} (lang=${first_lang})" "Error: ${err_msg}\nResponse:\n${eds_json}"
     [[ "$quiet" == "quiet" ]] || warn "Could not parse editions: $err_msg (see $UUP_PARSE_LOG)"
