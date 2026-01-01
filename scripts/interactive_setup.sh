@@ -142,13 +142,20 @@ prefetch_build_data() {
       continue
     }
     
-    # Check for rate limit error
-    if echo "$detail_json" | grep -qi "rate.limited"; then
+    # Check for rate limit error or API errors
+    if echo "$detail_json" | grep -qi "rate.limited\|RATE_LIMIT"; then
       echo "    Rate limited - skipping details for this build"
       continue
     fi
     
-    # Parse both editions and languages in one call
+    # Check if response is too small (likely an error)
+    local json_size=${#detail_json}
+    if [[ $json_size -lt 100 ]]; then
+      echo "    API returned error: $detail_json"
+      continue
+    fi
+    
+    # Parse both editions and languages in one call with better error reporting
     local parse_result
     parse_result="$(echo "$detail_json" | python3 <<'PY'
 import json, sys
@@ -156,21 +163,34 @@ try:
     data = json.load(sys.stdin)
     response = data.get("response", {})
     
+    # Check for API errors
     if "error" in response:
+        print(f"API Error: {response.get('error', 'unknown')}", file=sys.stderr)
         sys.exit(1)
     
     editions = response.get("editionFancyNames", {})
     langs = response.get("langList", [])
     
-    if editions and langs:
-        editions_str = "\n".join(editions.keys())
-        langs_str = "\n".join(langs)
-        print(f"{editions_str}|||{langs_str}")
-except:
+    if not editions:
+        print("No editions found in response", file=sys.stderr)
+        sys.exit(1)
+    if not langs:
+        print("No languages found in response", file=sys.stderr)
+        sys.exit(1)
+    
+    editions_str = "\n".join(editions.keys())
+    langs_str = "\n".join(langs)
+    print(f"{editions_str}|||{langs_str}")
+    
+except json.JSONDecodeError as e:
+    print(f"JSON decode error: {e}", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"Parse error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
-)" || {
-      echo "    Could not parse details"
+)" 2>&1 | tee /tmp/uup_parse_error.log || {
+      echo "    Could not parse details (check /tmp/uup_parse_error.log)"
       continue
     }
     
@@ -290,26 +310,21 @@ query_build_details() {
   }
   
   # Check for rate limiting or errors
-  if echo "$json" | grep -qi "rate.limited\|error"; then
-    local error_msg
-    error_msg="$(echo "$json" | python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('response',{}).get('error','unknown'))" 2>/dev/null || echo "unknown")"
-    warn "API Error: $error_msg"
-    if [[ "$error_msg" == *"RATE_LIMITED"* ]]; then
-      echo "  Waiting 5 seconds for rate limit..."
-      sleep 5
-      # Retry once
-      json="$(curl -fsSL "$api" 2>&1)" || {
-        warn "Retry failed"
-        return 1
-      }
-    else
-      return 1
-    fi
+  local json_size=${#json}
+  if [[ $json_size -lt 100 ]]; then
+    warn "API returned small response ($json_size bytes): $json"
+    return 1
   fi
   
-  # Parse BOTH editions and languages in a single Python call to avoid redundant parsing
-  local parse_result
-  parse_result="$(echo "$json" | python3 <<'PY'
+  if echo "$json" | grep -qi "rate.limited\|RATE_LIMIT"; then
+    warn "API rate limited"
+    return 1
+  fi
+  
+  # Parse BOTH editions and languages in a single Python call with better error reporting
+  local parse_result parse_error
+  parse_error=$(mktemp)
+  parse_result="$(echo "$json" | python3 <<'PY' 2>"$parse_error"
 import json, sys
 try:
     data = json.load(sys.stdin)
@@ -322,13 +337,13 @@ try:
     # Get editions
     editions = response.get("editionFancyNames", {})
     if not editions:
-        print("No editions found", file=sys.stderr)
+        print("No editions found in API response", file=sys.stderr)
         sys.exit(1)
     
     # Get languages
     langs = response.get("langList", [])
     if not langs:
-        print("No languages found", file=sys.stderr)
+        print("No languages found in API response", file=sys.stderr)
         sys.exit(1)
     
     # Output format: EDITIONS|||LANGUAGES
@@ -337,14 +352,23 @@ try:
     langs_str = "\n".join(langs)
     print(f"{editions_str}|||{langs_str}")
     
+except json.JSONDecodeError as e:
+    print(f"JSON decode error: {e}", file=sys.stderr)
+    sys.exit(1)
 except Exception as e:
     print(f"Parse error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
 )" || {
-    warn "Could not parse build details from API response"
+    if [[ -s "$parse_error" ]]; then
+      warn "Parse error: $(cat "$parse_error")"
+    else
+      warn "Could not parse build details from API response"
+    fi
+    rm -f "$parse_error"
     return 1
   }
+  rm -f "$parse_error"
   
   # Split the result into editions and languages
   local editions="${parse_result%|||*}"
