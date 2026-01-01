@@ -90,7 +90,12 @@ can_sudo() {
 prompt_yn() {
   local prompt="$1"
   local answer
-  read -p "$prompt [y/N]: " answer
+  # Use /dev/tty if stdin is not available (e.g., when piped from curl)
+  if [[ -t 0 ]]; then
+    read -r -p "$prompt [y/N]: " answer
+  else
+    read -r -p "$prompt [y/N]: " answer < /dev/tty
+  fi
   [[ "${answer,,}" == "y" ]]
 }
 

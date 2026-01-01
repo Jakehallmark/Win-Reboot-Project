@@ -66,7 +66,8 @@ EOF
   msg "Launching interactive setup..."
   sleep 1
   
-  exec "$INSTALL_DIR/scripts/interactive_setup.sh"
+  # Redirect stdin from terminal to allow interactive prompts
+  exec "$INSTALL_DIR/scripts/interactive_setup.sh" < /dev/tty
 }
 
 main "$@"

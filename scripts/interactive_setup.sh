@@ -3,6 +3,14 @@ set -euo pipefail
 
 # Interactive wrapper that guides users through the full flow
 
+# Ensure we have a terminal for interactive prompts
+if [[ ! -t 0 ]] && [[ ! -e /dev/tty ]]; then
+  echo "[!] Error: No interactive terminal available" >&2
+  echo "[!] This script requires user input and cannot run in a pipe." >&2
+  echo "[!] Please run directly: git clone https://github.com/Jakehallmark/Win-Reboot-Project.git && cd Win-Reboot-Project && ./scripts/interactive_setup.sh" >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -20,10 +28,10 @@ prompt_yn() {
   local answer
   
   if [[ "$default" == "y" ]]; then
-    read -p "$prompt [Y/n]: " answer
+    read -r -p "$prompt [Y/n]: " answer < /dev/tty
     answer="${answer:-y}"
   else
-    read -p "$prompt [y/N]: " answer
+    read -r -p "$prompt [y/N]: " answer < /dev/tty
     answer="${answer:-n}"
   fi
   
@@ -113,7 +121,7 @@ step_tiny11() {
   }
   
   local preset
-  read -p "Preset [minimal/lite/vanilla]: " preset
+  read -r -p "Preset [minimal/lite/vanilla]: " preset < /dev/tty
   preset="${preset:-minimal}"
   
   msg "Applying preset: $preset"
