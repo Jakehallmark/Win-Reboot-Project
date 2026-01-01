@@ -39,11 +39,11 @@ check_cmd() {
   if ! command -v "$cmd" >/dev/null 2>&1; then
     MISSING+=("$pkg")
     [[ $SILENT -eq 0 ]] && warn "Missing: $cmd (package: $pkg)"
-    return 1
   else
     [[ $SILENT -eq 0 ]] && msg "Found: $cmd"
-    return 0
   fi
+  # Always return 0 to prevent set -e from exiting early
+  return 0
 }
 
 detect_distro() {
