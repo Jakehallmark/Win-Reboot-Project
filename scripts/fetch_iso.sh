@@ -106,6 +106,26 @@ download_package_zip() {
     fatal_error "Failed to download UUP dump package" 20 \
       "Check network connection and try again"
   
+  # Check if we got an error response (HTML/text instead of ZIP)
+  local file_size
+  file_size=$(stat -c%s "$zip_path" 2>/dev/null || echo 0)
+  
+  if [[ $file_size -lt 1000 ]]; then
+    # Likely an error message, not a real package
+    local content
+    content=$(cat "$zip_path" 2>/dev/null)
+    echo "[DEBUG] Small file received ($file_size bytes): $content" >&2
+    
+    # Check if it's an error message
+    if [[ "$content" == *"error"* ]] || [[ "$content" == *"ERROR"* ]] || [[ "$content" == *"not found"* ]]; then
+      fatal_error "UUP dump returned error" 20 \
+        "Response: $content. The selected edition/language combination may not be available for this build."
+    fi
+    
+    fatal_error "UUP dump package too small" 20 \
+      "Received only $file_size bytes. Expected > 1KB. May be rate limited or invalid parameters."
+  fi
+  
   verify_file "$zip_path" 0 "UUP dump package"
   echo "$zip_path"
 }
