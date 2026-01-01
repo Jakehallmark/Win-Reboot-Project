@@ -149,9 +149,9 @@ query_build_details() {
     fi
   fi
   
-  # Parse available editions and languages
-  local editions languages
-  editions="$(echo "$json" | python3 <<'PY'
+  # Parse BOTH editions and languages in a single Python call to avoid redundant parsing
+  local parse_result
+  parse_result="$(echo "$json" | python3 <<'PY'
 import json, sys
 try:
     data = json.load(sys.stdin)
@@ -161,62 +161,53 @@ try:
         print(f"API Error: {response['error']}", file=sys.stderr)
         sys.exit(1)
     
+    # Get editions
     editions = response.get("editionFancyNames", {})
     if not editions:
         print("No editions found", file=sys.stderr)
         sys.exit(1)
-        
-    for ed in editions.keys():
-        print(ed)
-except Exception as e:
-    print(f"Parse error: {e}", file=sys.stderr)
-    sys.exit(1)
-PY
-)" || {
-    warn "Could not parse editions from API response"
-    return 1
-  }
-  
-  languages="$(echo "$json" | python3 <<'PY'
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    response = data.get("response", {})
     
-    if "error" in response:
-        sys.exit(1)
-    
+    # Get languages
     langs = response.get("langList", [])
     if not langs:
         print("No languages found", file=sys.stderr)
         sys.exit(1)
-        
-    for lang in langs:
-        print(lang)
+    
+    # Output format: EDITIONS|||LANGUAGES
+    # This allows us to parse both in one go
+    editions_str = "\n".join(editions.keys())
+    langs_str = "\n".join(langs)
+    print(f"{editions_str}|||{langs_str}")
+    
 except Exception as e:
     print(f"Parse error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
 )" || {
-    warn "Could not parse languages from API response"
+    warn "Could not parse build details from API response"
     return 1
   }
   
-  # Store results
-  if [[ -n "$editions" && -n "$editions_var" ]]; then
-    eval "$editions_var='$editions'"
-  fi
+  # Split the result into editions and languages
+  local editions="${parse_result%|||*}"
+  local languages="${parse_result#*|||}"
   
-  if [[ -n "$languages" && -n "$languages_var" ]]; then
-    eval "$languages_var='$languages'"
-  fi
-  
-  if [[ -n "$editions" && -n "$languages" ]]; then
-    return 0
-  else
+  # Validate we got both parts
+  if [[ -z "$editions" || -z "$languages" || "$editions" == "$parse_result" ]]; then
     warn "Incomplete data received from API"
     return 1
   fi
+  
+  # Store results
+  if [[ -n "$editions_var" ]]; then
+    eval "$editions_var='$editions'"
+  fi
+  
+  if [[ -n "$languages_var" ]]; then
+    eval "$languages_var='$languages'"
+  fi
+  
+  return 0
 }
 
 step_fetch_iso() {

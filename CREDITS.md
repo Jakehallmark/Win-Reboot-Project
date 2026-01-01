@@ -38,6 +38,7 @@ Cross-platform library for creating, extracting, and modifying Windows Imaging (
 
 ### UUP Dump
 **Website**: https://uupdump.net  
+**API Documentation**: https://git.uupdump.net/uup-dump/api  
 **Community**: UUP Dump contributors
 
 Community-driven service for downloading Windows updates directly from Microsoft's servers.
@@ -46,6 +47,15 @@ Community-driven service for downloading Windows updates directly from Microsoft
 - Generates download scripts for authentic Windows ISOs
 - Eliminates need for third-party ISO sources
 - Ensures all downloads come from official Microsoft CDN
+- RESTful API enables automated build queries and downloads
+
+This project uses the UUP dump API to:
+- Query available Windows 11 builds by channel (Retail, Release Preview, etc.)
+- Fetch build-specific metadata (available editions, languages, architecture)
+- Download official Microsoft update packages
+- Generate bootable ISOs from authentic Windows components
+
+Related tools: [uup-dump-get-windows-iso](https://github.com/rgl/uup-dump-get-windows-iso) by rgl
 
 ### aria2
 **Website**: https://aria2.github.io  
