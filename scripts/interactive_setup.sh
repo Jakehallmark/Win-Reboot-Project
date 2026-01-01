@@ -88,25 +88,25 @@ prefetch_build_data() {
   echo "  This reduces rate limiting and speeds up the selection process"
   echo ""
   
-  # Query common build configurations
+  # Query only the most common configurations to minimize API calls
+  # Most users want retail/amd64, so prioritize that
   local -a configs=(
     "retail:amd64"
     "rp:amd64"
-    "retail:arm64"
-    "rp:arm64"
   )
   
-  local delay=0
+  local delay=5  # Start with 5 second delay
   for config in "${configs[@]}"; do
     local channel="${config%:*}"
     local arch="${config#*:}"
     local cache_key="${channel}_${arch}"
     
-    # Add increasing delay to avoid rate limiting
-    if [[ $delay -gt 0 ]]; then
+    # Add delay between requests (5s minimum, increases each iteration)
+    if [[ "$config" != "retail:amd64" ]]; then
+      echo "  Waiting ${delay}s to avoid rate limiting..."
       sleep $delay
     fi
-    delay=$((delay + 2))
+    delay=$((delay + 5))  # Increase delay: 5s, 10s, 15s, etc.
     
     echo -n "  Querying ${channel}/${arch}... "
     
@@ -131,15 +131,22 @@ prefetch_build_data() {
     BUILD_CACHE_IDS["$cache_key"]="$update_id"
     echo "found (ID: ${update_id:0:8}...)"
     
-    # Now fetch editions and languages for this build
-    sleep 3
+    # Now fetch editions and languages for this build with longer delay
+    echo "  Waiting 8s before querying build details..."
+    sleep 8
     
     local detail_api="https://api.uupdump.net/get.php?id=${update_id}"
     local detail_json
     detail_json="$(curl -fsSL "$detail_api" 2>&1)" || {
-      echo "    Could not fetch details"
+      echo "    Could not fetch details (network error)"
       continue
     }
+    
+    # Check for rate limit error
+    if echo "$detail_json" | grep -qi "rate.limited"; then
+      echo "    Rate limited - skipping details for this build"
+      continue
+    fi
     
     # Parse both editions and languages in one call
     local parse_result
@@ -162,7 +169,10 @@ try:
 except:
     sys.exit(1)
 PY
-)" || continue
+)" || {
+      echo "    Could not parse details"
+      continue
+    }
     
     # Cache the results
     local editions="${parse_result%|||*}"
@@ -173,12 +183,17 @@ PY
       BUILD_CACHE_LANGUAGES["$cache_key"]="$languages"
       local ed_count=$(echo "$editions" | wc -l)
       local lang_count=$(echo "$languages" | wc -l)
-      echo "    Cached $ed_count editions, $lang_count languages"
+      echo "    ✓ Cached $ed_count editions, $lang_count languages"
     fi
   done
   
   echo ""
-  msg "Build data cached successfully"
+  local cached_count=${#BUILD_CACHE_IDS[@]}
+  if [[ $cached_count -gt 0 ]]; then
+    msg "Build data cached successfully ($cached_count configuration(s))"
+  else
+    warn "Could not cache build data - will query on demand"
+  fi
   echo ""
 }
 
@@ -263,8 +278,9 @@ query_build_details() {
   
   msg "Querying available editions and languages..."
   
-  # Add delay to avoid rate limiting
-  sleep 3
+  # Add longer delay to avoid rate limiting (API seems strict on get.php)
+  echo "  Waiting 10s to avoid rate limiting..."
+  sleep 10
   
   local api="https://api.uupdump.net/get.php?id=${update_id}"
   local json
