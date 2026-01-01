@@ -1,0 +1,29 @@
+# Conservative app removals (Tiny11-inspired)
+Program Files/WindowsApps/Microsoft.BingNews_*
+Program Files/WindowsApps/Microsoft.GetHelp_*
+Program Files/WindowsApps/Microsoft.Getstarted_*
+Program Files/WindowsApps/Microsoft.MicrosoftOfficeHub_*
+Program Files/WindowsApps/Microsoft.MicrosoftSolitaireCollection_*
+Program Files/WindowsApps/Microsoft.MicrosoftStickyNotes_*
+Program Files/WindowsApps/Microsoft.People_*
+Program Files/WindowsApps/Microsoft.SkypeApp_*
+Program Files/WindowsApps/Microsoft.Todos_*
+Program Files/WindowsApps/Microsoft.XboxApp_*
+Program Files/WindowsApps/Microsoft.XboxGamingOverlay_*
+Program Files/WindowsApps/Microsoft.ZuneMusic_*
+Program Files/WindowsApps/Microsoft.ZuneVideo_*
+Program Files/WindowsApps/MicrosoftCorporationII.QuickAssist_*
+Program Files/WindowsApps/Microsoft.WindowsFeedbackHub_*
+Program Files/WindowsApps/Microsoft.YourPhone_*
+Program Files/WindowsApps/Clipchamp.Clipchamp_*
+Program Files/WindowsApps/MicrosoftTeams_*
+Windows/SystemApps/Microsoft.Windows.Cortana_cw5n1h2txyewy
+Windows/SystemApps/Microsoft.XboxGamingOverlay_cw5n1h2txyewy
+Windows/SystemApps/Microsoft.XboxGameCallableUI_cw5n1h2txyewy
+Windows/SystemApps/Microsoft.XboxSpeechToTextOverlay_cw5n1h2txyewy
+Windows/SystemApps/Clipchamp.Clipchamp_cw5n1h2txyewy
+Windows/SystemApps/QuickAssist_cw5n1h2txyewy
+Windows/SystemApps/ParentalControls_cw5n1h2txyewy
+Windows/SystemApps/XGpuEjectDialog_cw5n1h2txyewy
+Windows/SystemApps/MapControl_cw5n1h2txyewy
+Windows/System32/OneDriveSetup.exe

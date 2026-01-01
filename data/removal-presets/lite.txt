@@ -1,0 +1,13 @@
+# More aggressive removals; may affect inbox troubleshooting tools.
+@include minimal
+Windows/System32/Recovery
+Windows/Help
+Windows/INF/WinREConfig.xml
+Windows/winsxs/*MediaPlayer*
+Windows/winsxs/*QuickAssist*
+Windows/winsxs/*MixedReality*
+Windows/winsxs/*OneDrive*
+Windows/servicing/Packages/*MediaPlayer*
+Windows/servicing/Packages/*QuickAssist*
+Windows/servicing/Packages/*MixedReality*
+Windows/servicing/Packages/*OneDrive*
