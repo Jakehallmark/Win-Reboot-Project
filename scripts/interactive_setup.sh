@@ -78,6 +78,35 @@ check_dependencies() {
   echo ""
 }
 
+query_available_builds() {
+  local channel="$1"
+  local arch="$2"
+  
+  msg "Querying available builds from UUP dump..."
+  
+  local api="https://api.uupdump.net/fetchupd.php?arch=${arch}&ring=${channel}&build=latest"
+  local json
+  json="$(curl -fsSL "$api" 2>&1)" || {
+    warn "Could not query UUP dump API, using default options"
+    return 1
+  }
+  
+  local update_id
+  update_id="$(echo "$json" | python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('response',{}).get('updateId',''))" 2>/dev/null)" || return 1
+  
+  if [[ -z "$update_id" ]]; then
+    warn "Could not find available builds, using default options"
+    return 1
+  fi
+  
+  local build_title
+  build_title="$(echo "$json" | python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('response',{}).get('updateTitle','Unknown'))" 2>/dev/null)"
+  
+  echo "  Found: $build_title"
+  echo "  Build ID: $update_id"
+  return 0
+}
+
 step_fetch_iso() {
   msg "Step 1: Download Windows 11 ISO"
   echo ""
@@ -106,6 +135,55 @@ step_fetch_iso() {
     echo ""
     msg "Custom ISO Settings"
     echo ""
+    
+    # First, let user select channel and architecture to query available builds
+    echo "Select Release Channel:"
+    echo "  1) Retail (stable, recommended)"
+    echo "  2) Release Preview (pre-release testing)"
+    echo ""
+    local channel_choice
+    read -r -p "Choice [1-2, default 1]: " channel_choice < /dev/tty
+    channel_choice="${channel_choice:-1}"
+    
+    local selected_channel
+    case "$channel_choice" in
+      1) selected_channel="retail";;
+      2) selected_channel="rp";;
+      *) warn "Invalid choice, using retail"; selected_channel="retail";;
+    esac
+    
+    echo ""
+    
+    # Architecture selection
+    echo "Select Architecture:"
+    echo "  1) x64 (amd64) - 64-bit Intel/AMD"
+    echo "  2) arm64 - 64-bit ARM (for ARM devices)"
+    echo ""
+    local arch_choice
+    read -r -p "Choice [1-2, default 1]: " arch_choice < /dev/tty
+    arch_choice="${arch_choice:-1}"
+    
+    local selected_arch
+    case "$arch_choice" in
+      1) selected_arch="amd64";;
+      2) selected_arch="arm64";;
+      *) warn "Invalid choice, using amd64"; selected_arch="amd64";;
+    esac
+    
+    echo ""
+    
+    # Query what's actually available for selected channel/arch
+    if query_available_builds "$selected_channel" "$selected_arch"; then
+      echo ""
+      msg "The following build is available and will be downloaded"
+    else
+      warn "Could not verify available builds, proceeding anyway..."
+    fi
+    
+    echo ""
+    
+    fetch_args+=(--channel "$selected_channel")
+    fetch_args+=(--arch "$selected_arch")
     
     # Edition selection
     echo "Select Edition:"
@@ -163,40 +241,6 @@ step_fetch_iso() {
         fetch_args+=(--lang "$custom_lang")
         ;;
       *) warn "Invalid choice, using en-us"; fetch_args+=(--lang "en-us");;
-    esac
-    
-    echo ""
-    
-    # Architecture selection
-    echo "Select Architecture:"
-    echo "  1) x64 (amd64) - 64-bit Intel/AMD"
-    echo "  2) arm64 - 64-bit ARM (for ARM devices)"
-    echo ""
-    local arch_choice
-    read -r -p "Choice [1-2, default 1]: " arch_choice < /dev/tty
-    arch_choice="${arch_choice:-1}"
-    
-    case "$arch_choice" in
-      1) fetch_args+=(--arch "amd64");;
-      2) fetch_args+=(--arch "arm64");;
-      *) warn "Invalid choice, using amd64"; fetch_args+=(--arch "amd64");;
-    esac
-    
-    echo ""
-    
-    # Channel selection
-    echo "Select Release Channel:"
-    echo "  1) Retail (stable, recommended)"
-    echo "  2) Release Preview (pre-release testing)"
-    echo ""
-    local channel_choice
-    read -r -p "Choice [1-2, default 1]: " channel_choice < /dev/tty
-    channel_choice="${channel_choice:-1}"
-    
-    case "$channel_choice" in
-      1) fetch_args+=(--channel "retail");;
-      2) fetch_args+=(--channel "rp");;
-      *) warn "Invalid choice, using retail"; fetch_args+=(--channel "retail");;
     esac
     
     echo ""
