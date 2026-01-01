@@ -60,9 +60,9 @@ EOF
 check_dependencies() {
   msg "Checking dependencies..."
   if [[ -x "$SCRIPT_DIR/check_deps.sh" ]]; then
-    if ! "$SCRIPT_DIR/check_deps.sh"; then
+    if ! "$SCRIPT_DIR/check_deps.sh" --auto-install; then
       fatal_error "Missing required dependencies" 10 \
-        "Run: ./scripts/check_deps.sh to see what's missing, then install the packages"
+        "Run: ./scripts/check_deps.sh --auto-install to try again, or install packages manually"
     fi
   else
     warn "check_deps.sh not found, skipping dependency check"

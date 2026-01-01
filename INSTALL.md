@@ -38,6 +38,13 @@ Run the dependency checker:
 ./scripts/check_deps.sh
 ```
 
+For automatic installation (will prompt for sudo if needed):
+```bash
+./scripts/check_deps.sh --auto-install
+```
+
+Or install manually for your distribution:
+
 #### Debian/Ubuntu/Linux Mint
 ```bash
 sudo apt update

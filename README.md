@@ -84,6 +84,9 @@ If you've already cloned the repo:
 # 0) Check dependencies
 ./scripts/check_deps.sh
 
+# Or auto-install missing packages (interactive permission prompt)
+./scripts/check_deps.sh --auto-install
+
 # 1) Download latest public Win11 ISO (Retail, x64, en-US by default)
 ./scripts/fetch_iso.sh
 

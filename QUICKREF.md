@@ -24,7 +24,7 @@ wget -qO- https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main
 
 ```bash
 # 1. Check dependencies
-./scripts/check_deps.sh
+./scripts/check_deps.sh --auto-install
 
 # 2. Download Windows 11 ISO
 ./scripts/fetch_iso.sh
@@ -161,7 +161,10 @@ df -h $HOME
 
 ### Missing dependencies
 ```bash
-# Check what's missing
+# Check what's missing and auto-install
+./scripts/check_deps.sh --auto-install
+
+# Or check only (no installation)
 ./scripts/check_deps.sh
 
 # Ubuntu/Debian
