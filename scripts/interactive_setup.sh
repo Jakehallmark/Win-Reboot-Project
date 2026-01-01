@@ -311,21 +311,24 @@ try:
         sys.exit(1)
     
     data = json.loads(input_data)
-    
-    # listlangs.php returns a list of language codes directly
-    if isinstance(data, list):
-        langs = data
-    elif isinstance(data, dict) and 'response' in data:
-        langs = data.get('response', [])
+    response = data.get('response', data) if isinstance(data, dict) else data
+
+    # listlangs.php can return:
+    # - a plain list of codes
+    # - an object with response.langList (newer API shape)
+    if isinstance(response, list):
+        langs = response
+    elif isinstance(response, dict) and 'langList' in response:
+        langs = response.get('langList', [])
     else:
         langs = []
-    
+
     if not langs:
         print("INSIDER_BUILD", file=sys.stderr)
         sys.exit(1)
-    
+
     print("\n".join(langs))
-    
+
 except json.JSONDecodeError as e:
     print(f"JSON decode error: {e}", file=sys.stderr)
     sys.exit(1)
@@ -386,21 +389,24 @@ try:
         sys.exit(1)
     
     data = json.loads(input_data)
-    
-    # listeditions.php returns a list of edition codes directly
-    if isinstance(data, list):
-        editions = data
-    elif isinstance(data, dict) and 'response' in data:
-        editions = data.get('response', [])
+    response = data.get('response', data) if isinstance(data, dict) else data
+
+    # listeditions.php can return:
+    # - a plain list of edition codes
+    # - an object with response.editionList (newer API shape)
+    if isinstance(response, list):
+        editions = response
+    elif isinstance(response, dict) and 'editionList' in response:
+        editions = response.get('editionList', [])
     else:
         editions = []
-    
+
     if not editions:
         print("No editions found", file=sys.stderr)
         sys.exit(1)
-    
+
     print("\n".join(editions))
-    
+
 except json.JSONDecodeError as e:
     print(f"JSON decode error: {e}", file=sys.stderr)
     sys.exit(1)
