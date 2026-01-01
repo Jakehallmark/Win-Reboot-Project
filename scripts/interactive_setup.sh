@@ -114,9 +114,10 @@ step_fetch_iso() {
     echo "  3) Core (Home without OEM branding)"
     echo "  4) Enterprise"
     echo "  5) Education"
+    echo "  6) All editions (includes all above)"
     echo ""
     local edition_choice
-    read -r -p "Choice [1-5, default 1]: " edition_choice < /dev/tty
+    read -r -p "Choice [1-6, default 1]: " edition_choice < /dev/tty
     edition_choice="${edition_choice:-1}"
     
     case "$edition_choice" in
@@ -125,6 +126,7 @@ step_fetch_iso() {
       3) fetch_args+=(--edition "core");;
       4) fetch_args+=(--edition "enterprise");;
       5) fetch_args+=(--edition "education");;
+      6) fetch_args+=(--edition "professional,home,core,enterprise,education");;
       *) warn "Invalid choice, using Professional"; fetch_args+=(--edition "professional");;
     esac
     
