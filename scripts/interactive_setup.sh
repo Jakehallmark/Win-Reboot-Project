@@ -95,18 +95,17 @@ prefetch_build_data() {
     "rp:amd64"
   )
   
-  local delay=5  # Start with 5 second delay
+  local delay=10  # Use 10 second delay (same as UUP Dump's own tools)
   for config in "${configs[@]}"; do
     local channel="${config%:*}"
     local arch="${config#*:}"
     local cache_key="${channel}_${arch}"
     
-    # Add delay between requests (5s minimum, increases each iteration)
+    # Add delay between requests (10s per UUP Dump's own API usage)
     if [[ "$config" != "retail:amd64" ]]; then
       echo "  Waiting ${delay}s to avoid rate limiting..."
       sleep $delay
     fi
-    delay=$((delay + 5))  # Increase delay: 5s, 10s, 15s, etc.
     
     echo -n "  Querying ${channel}/${arch}... "
     
@@ -131,9 +130,10 @@ prefetch_build_data() {
     BUILD_CACHE_IDS["$cache_key"]="$update_id"
     echo "found (ID: ${update_id:0:8}...)"
     
-    # Now fetch editions and languages for this build with longer delay
-    echo "  Waiting 8s before querying build details..."
-    sleep 8
+    # Now fetch editions and languages for this build
+    # Use 10s delay per UUP Dump's own API usage pattern
+    echo "  Waiting 10s before querying build details..."
+    sleep 10
     
     local detail_api="https://api.uupdump.net/get.php?id=${update_id}"
     local detail_json
