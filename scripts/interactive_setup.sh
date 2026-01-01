@@ -309,39 +309,35 @@ query_build_details() {
   
   msg "Querying available editions and languages..."
   
-  # Add longer delay to avoid rate limiting (API seems strict on get.php)
-  echo "  Waiting 10s to avoid rate limiting..."
+  # First, query available languages using listlangs.php
+  echo "  Waiting 10s before querying languages..."
   sleep 10
   
-  local api="https://api.uupdump.net/get.php?id=${update_id}"
-  local json
-  json="$(curl -fsSL "$api" 2>&1)" || {
-    warn "Could not query build details (network error)"
+  local langs_api="https://api.uupdump.net/listlangs.php?id=${update_id}"
+  local langs_json
+  langs_json="$(curl -fsSL "$langs_api" 2>&1)" || {
+    warn "Could not query languages (network error)"
     return 1
   }
   
   # Check if response is empty
-  if [[ -z "$json" ]]; then
-    warn "API returned empty response (rate limiting or connection issue)"
+  if [[ -z "$langs_json" ]]; then
+    warn "Languages API returned empty response (rate limiting or connection issue)"
     return 1
   fi
   
-  # Check for rate limiting or errors
-  local json_size=${#json}
-  if [[ $json_size -lt 100 ]]; then
-    warn "API returned small response ($json_size bytes): $json"
+  # Check response size
+  local json_size=${#langs_json}
+  if [[ $json_size -lt 20 ]]; then
+    warn "Languages API returned small response ($json_size bytes)"
     return 1
   fi
   
-  if echo "$json" | grep -qi "rate.limited\|RATE_LIMIT"; then
-    warn "API rate limited"
-    return 1
-  fi
-  
-  # Parse BOTH editions and languages in a single Python call with better error reporting
-  local parse_result parse_error
+  # Parse languages response
+  local parse_error
   parse_error=$(mktemp)
-  parse_result="$(echo "$json" | python3 <<'PY' 2>"$parse_error"
+  local langs_list
+  langs_list="$(echo "$langs_json" | python3 <<'PY' 2>"$parse_error"
 import json, sys
 try:
     input_data = sys.stdin.read().strip()
@@ -350,30 +346,20 @@ try:
         sys.exit(1)
     
     data = json.loads(input_data)
-    response = data.get("response", {})
     
-    if "error" in response:
-        print(f"API Error: {response['error']}", file=sys.stderr)
+    # listlangs.php returns a list of language codes directly
+    if isinstance(data, list):
+        langs = data
+    elif isinstance(data, dict) and 'response' in data:
+        langs = data.get('response', [])
+    else:
+        langs = []
+    
+    if not langs:
+        print("INSIDER_BUILD", file=sys.stderr)
         sys.exit(1)
     
-    # Get editions
-    editions = response.get("editionFancyNames", {})
-    langs = response.get("langList", [])
-    
-    # Check if this is an Insider build (no edition/language selection available)
-    if not editions or not langs:
-        print("INSIDER_BUILD")
-        sys.exit(0)
-    
-    if not editions:
-        print("No editions found in API response", file=sys.stderr)
-        sys.exit(1)
-    
-    # Output format: EDITIONS|||LANGUAGES
-    # This allows us to parse both in one go
-    editions_str = "\n".join(editions.keys())
-    langs_str = "\n".join(langs)
-    print(f"{editions_str}|||{langs_str}")
+    print("\n".join(langs))
     
 except json.JSONDecodeError as e:
     print(f"JSON decode error: {e}", file=sys.stderr)
@@ -382,40 +368,91 @@ except Exception as e:
     print(f"Parse error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
-)" || {
-    if [[ -s "$parse_error" ]]; then
-      warn "Parse error: $(cat "$parse_error")"
-    else
-      warn "Could not parse build details from API response"
+)" 2>"$parse_error" || {
+    local err_msg=$(cat "$parse_error" 2>/dev/null)
+    if [[ "$err_msg" == *"INSIDER_BUILD"* ]]; then
+      # This build doesn't support language selection (Insider build)
+      echo "INSIDER_BUILD"
+      rm -f "$parse_error"
+      return 0
     fi
+    warn "Could not parse languages: $err_msg"
     rm -f "$parse_error"
     return 1
   }
   rm -f "$parse_error"
   
-  # Check if this is an Insider build
-  if [[ "$parse_result" == "INSIDER_BUILD" ]]; then
+  if [[ "$langs_list" == "INSIDER_BUILD" ]]; then
+    # This is an Insider build with no edition/language options
     echo "INSIDER_BUILD"
     return 0
   fi
   
-  # Split the result into editions and languages
-  local editions="${parse_result%|||*}"
-  local languages="${parse_result#*|||}"
+  # Now query available editions using listeditions.php with the first language
+  local first_lang=$(echo "$langs_list" | head -1)
+  echo "  Waiting 10s before querying editions..."
+  sleep 10
   
-  # Validate we got both parts
-  if [[ -z "$editions" || -z "$languages" || "$editions" == "$parse_result" ]]; then
-    warn "Incomplete data received from API"
+  local eds_api="https://api.uupdump.net/listeditions.php?lang=${first_lang}&id=${update_id}"
+  local eds_json
+  eds_json="$(curl -fsSL "$eds_api" 2>&1)" || {
+    warn "Could not query editions (network error)"
+    return 1
+  }
+  
+  # Check if response is empty
+  if [[ -z "$eds_json" ]]; then
+    warn "Editions API returned empty response (rate limiting or connection issue)"
     return 1
   fi
   
-  # Store results
-  if [[ -n "$editions_var" ]]; then
-    eval "$editions_var='$editions'"
-  fi
+  # Parse editions response
+  parse_error=$(mktemp)
+  local eds_list
+  eds_list="$(echo "$eds_json" | python3 <<'PY' 2>"$parse_error"
+import json, sys
+try:
+    input_data = sys.stdin.read().strip()
+    if not input_data:
+        print("Empty API response", file=sys.stderr)
+        sys.exit(1)
+    
+    data = json.loads(input_data)
+    
+    # listeditions.php returns a list of edition codes directly
+    if isinstance(data, list):
+        editions = data
+    elif isinstance(data, dict) and 'response' in data:
+        editions = data.get('response', [])
+    else:
+        editions = []
+    
+    if not editions:
+        print("No editions found", file=sys.stderr)
+        sys.exit(1)
+    
+    print("\n".join(editions))
+    
+except json.JSONDecodeError as e:
+    print(f"JSON decode error: {e}", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"Parse error: {e}", file=sys.stderr)
+    sys.exit(1)
+PY
+)" 2>"$parse_error" || {
+    warn "Could not parse editions: $(cat "$parse_error")"
+    rm -f "$parse_error"
+    return 1
+  }
+  rm -f "$parse_error"
   
+  # Store results in variables if provided
+  if [[ -n "$editions_var" ]]; then
+    eval "$editions_var='$eds_list'"
+  fi
   if [[ -n "$languages_var" ]]; then
-    eval "$languages_var='$languages'"
+    eval "$languages_var='$langs_list'"
   fi
   
   return 0
