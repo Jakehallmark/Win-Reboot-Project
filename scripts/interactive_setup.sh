@@ -39,15 +39,15 @@ This will:
   3. Add a GRUB entry to boot the installer
   4. Reboot into the Windows 11 installer
 
-⚠️  WARNING:
+WARNING:
   - Secure Boot MUST be disabled
   - This modifies your GRUB configuration
   - The Windows installer can wipe your disk
   - Test in a VM first!
 
-💡 Tiny11 Credit: This project adapts the excellent methodology from
-   ntdevlabs' Tiny11 project for use on Linux systems.
-   Visit: https://github.com/ntdevlabs/tiny11builder
+Tiny11 Credit: This project adapts the excellent methodology from
+ntdevlabs' Tiny11 project for use on Linux systems.
+Visit: https://github.com/ntdevlabs/tiny11builder
 
 EOF
   prompt_yn "Continue?" "n" || exit 0

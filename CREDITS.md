@@ -1,14 +1,14 @@
 # Credits & Acknowledgments
 
-Win-Reboot-Project stands on the shoulders of giants. This project would not exist without the incredible work of the following individuals and projects.
+Win-Reboot-Project stands on the shoulders of giants. This project wouldn't exist without the incredible work of these individuals and projects.
 
-## 🌟 Primary Inspiration
+## Primary Inspiration
 
 ### Tiny11 Project
-**Repository**: https://github.com/ntdevlabs/tiny11builder  
-**Creator**: ntdevlabs
+Repository: https://github.com/ntdevlabs/tiny11builder  
+Creator: ntdevlabs
 
-**Our deepest gratitude goes to ntdevlabs and the Tiny11 project!**
+Our deepest gratitude goes to ntdevlabs and the Tiny11 project.
 
 The Tiny11 project revolutionized Windows 11 by creating a lightweight, bloat-free installation that removes unnecessary components while maintaining full functionality. Their work provided:
 
@@ -20,11 +20,11 @@ The Tiny11 project revolutionized Windows 11 by creating a lightweight, bloat-fr
 
 Win-Reboot-Project adapts their PowerShell-based approach to work natively on Linux systems, bringing the Tiny11 philosophy to the Linux ecosystem.
 
-**If you appreciate Win-Reboot-Project, please visit and star the original Tiny11 project!**
+If you appreciate Win-Reboot-Project, please visit and star the original Tiny11 project.
 
 ---
 
-## 🛠️ Essential Tools & Libraries
+## Essential Tools & Libraries
 
 ### wimlib
 **Website**: https://wimlib.net  
@@ -59,7 +59,7 @@ Lightweight multi-protocol & multi-source download utility.
 
 ---
 
-## 📚 Technology Stack
+## Technology Stack
 
 ### GRUB Bootloader
 **Website**: https://www.gnu.org/software/grub/
@@ -76,7 +76,7 @@ ISO 9660 filesystem creation tools for rebuilding modified Windows ISOs.
 
 ---
 
-## 🎓 Knowledge & Research
+## Knowledge & Research
 
 ### Microsoft Documentation
 - Official Windows setup and deployment documentation
@@ -90,7 +90,7 @@ ISO 9660 filesystem creation tools for rebuilding modified Windows ISOs.
 
 ---
 
-## 💡 Concept & Methodology
+## Concept & Methodology
 
 This project combines:
 1. **Tiny11's debloating philosophy** - Minimal, functional Windows
@@ -100,7 +100,7 @@ This project combines:
 
 ---
 
-## 🙏 Thank You
+## Thank You
 
 Special thanks to:
 - **ntdevlabs** for creating and maintaining Tiny11
@@ -112,7 +112,7 @@ Special thanks to:
 
 ---
 
-## 📜 License Acknowledgments
+## License Acknowledgments
 
 Win-Reboot-Project is released under the MIT License.
 
@@ -127,15 +127,15 @@ All external tools retain their original licenses. Please refer to individual pr
 
 ---
 
-## 🤝 Contributing Back
+## Contributing Back
 
 If Win-Reboot-Project helps you, please consider:
 
-1. **Star this repository** and the [Tiny11 project](https://github.com/ntdevlabs/tiny11builder)
-2. **Report bugs and suggest improvements** via GitHub issues
-3. **Share your experience** with the community
-4. **Contribute code** via pull requests
-5. **Support the upstream projects** we depend on
+1. Star this repository and the [Tiny11 project](https://github.com/ntdevlabs/tiny11builder)
+2. Report bugs and suggest improvements via GitHub issues
+3. Share your experience with the community
+4. Contribute code via pull requests
+5. Support the upstream projects we depend on
 
 ---
 

@@ -29,7 +29,7 @@ EOF
   if [[ -f "$ROOT_DIR/out/win11.iso" ]]; then
     local size_mb
     size_mb=$(($(stat -c%s "$ROOT_DIR/out/win11.iso") / 1024 / 1024))
-    echo "  • out/win11.iso: ${size_mb} MB ✓"
+    echo "  • out/win11.iso: ${size_mb} MB (found)"
   else
     echo "  • out/win11.iso: Not found"
   fi
@@ -37,7 +37,7 @@ EOF
   if [[ -f "$ROOT_DIR/out/win11-tiny.iso" ]]; then
     local size_mb
     size_mb=$(($(stat -c%s "$ROOT_DIR/out/win11-tiny.iso") / 1024 / 1024))
-    echo "  • out/win11-tiny.iso: ${size_mb} MB ✓"
+    echo "  • out/win11-tiny.iso: ${size_mb} MB (found)"
   else
     echo "  • out/win11-tiny.iso: Not found"
   fi
@@ -46,7 +46,7 @@ EOF
   # Check GRUB entry
   msg "GRUB Status:"
   if [[ -f "/etc/grub.d/40_custom_win11" ]]; then
-    echo "  • GRUB entry: Installed ✓"
+    echo "  • GRUB entry: Installed"
   else
     echo "  • GRUB entry: Not installed"
   fi
@@ -54,7 +54,7 @@ EOF
   if [[ -f "/boot/win11.iso" ]]; then
     local size_mb
     size_mb=$(($(stat -c%s "/boot/win11.iso" 2>/dev/null || echo 0) / 1024 / 1024))
-    echo "  • /boot/win11.iso: ${size_mb} MB ✓"
+    echo "  • /boot/win11.iso: ${size_mb} MB (found)"
   else
     echo "  • /boot/win11.iso: Not found"
   fi

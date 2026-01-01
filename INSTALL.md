@@ -4,17 +4,17 @@ This guide walks through the complete installation process for Win-Reboot-Projec
 
 ## About This Project
 
-**Win-Reboot-Project** adapts the methodology from the excellent [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by **ntdevlabs** to work natively on Linux systems. 
+Win-Reboot-Project adapts the methodology from the excellent [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by ntdevlabs to work natively on Linux systems. 
 
-### 🙏 Special Thanks to Tiny11
+### Special Thanks to Tiny11
 
-We owe a huge debt of gratitude to **ntdevlabs** and the Tiny11 community for:
+We owe a huge debt of gratitude to ntdevlabs and the Tiny11 community for:
 - Pioneering the lightweight Windows 11 approach
 - Documenting safe component removal strategies
 - Sharing their expertise with the community
 - Creating tools that inspired this Linux-native implementation
 
-**If you find this project useful, please also check out and support the original Tiny11 project!**
+If you find this project useful, please also check out and support the original Tiny11 project.
 
 ---
 

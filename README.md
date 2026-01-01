@@ -3,35 +3,35 @@ Win-Reboot-Project
 
 **Version 1.0.0**
 
-Tooling to download a fresh, official Windows 11 ISO from Microsoft via UUP dump, optionally apply Tiny11-style trimming on Linux, and add a GRUB menu entry to boot straight into the installer (no USB). Secure Boot must be off for the GRUB loopback flow.
+A collection of tools to download a fresh Windows 11 ISO from Microsoft (via UUP dump), optionally trim it down Tiny11-style on Linux, and add a GRUB menu entry so you can boot straight into the installer without needing a USB drive. Note that Secure Boot needs to be disabled for the GRUB loopback method to work.
 
 Status
 ------
-- Scripts are scaffolded; no binaries vendored. Downloads come directly from Microsoft CDN through the UUP dump helper.
-- Use in a VM first. This workflow modifies your bootloader and preps an on-disk installer that can wipe the machine.
+- All scripts are ready to use. No binaries are included - everything downloads directly from Microsoft's CDN through the UUP dump helper.
+- Try this in a VM first. This setup modifies your bootloader and sets up an on-disk installer that can completely wipe your machine.
 
-Prerequisites (host)
---------------------
-- Linux with GRUB and UEFI (Secure Boot disabled for loopback chainload).
-- ~15 GB free space (`~/Win-Reboot-Project/out` + `/boot/win11.iso`).
-- Packages (auto-detected in scripts but install as needed):
+Prerequisites
+-------------
+- Linux with GRUB and UEFI (Secure Boot must be disabled for loopback chainloading)
+- About 15 GB free space for `~/Win-Reboot-Project/out` and `/boot/win11.iso`
+- Required packages (scripts will check for these, but you'll need to install them):
   - Debian/Ubuntu: `aria2 cabextract wimtools genisoimage p7zip-full grub-common`
   - Fedora/RHEL: `aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools`
   - Arch: `aria2 cabextract wimlib cdrtools p7zip grub`
-- Network access to Microsoft CDN and GitHub (for UUP dump helper).
+- Internet access to reach Microsoft's CDN and GitHub
 
-High-level flow
----------------
-1. `scripts/fetch_iso.sh` — Resolve latest public Win11 GA build, download/build ISO via UUP dump, store at `out/win11.iso`.
-2. `scripts/tiny11.sh` — Optional interactive trimming of `install.wim/install.esd` using wimlib with presets (minimal/lite/vanilla).
-3. `scripts/grub_entry.sh` — Copy ISO to `/boot/win11.iso`, add GRUB menu entry to chainload the installer, regenerate grub.cfg.
-4. `scripts/reboot_to_installer.sh` — Sanity checks and reboot into the new GRUB entry.
+How it works
+------------
+1. `scripts/fetch_iso.sh` finds the latest public Windows 11 build, downloads and builds the ISO via UUP dump, then saves it to `out/win11.iso`
+2. `scripts/tiny11.sh` (optional) trims down `install.wim/install.esd` using wimlib with your choice of presets (minimal, lite, or vanilla)
+3. `scripts/grub_entry.sh` copies the ISO to `/boot/win11.iso`, adds a GRUB menu entry to chainload the installer, and regenerates grub.cfg
+4. `scripts/reboot_to_installer.sh` does some sanity checks and reboots into the new GRUB entry
 
 Tiny11 Attribution
 ------------------
-**This project is inspired by and based on the excellent work of the [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by ntdevlabs.**
+This project is inspired by and based on the excellent work of the [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by ntdevlabs.
 
-🎉 **Kudos to ntdevlabs** for their pioneering work in creating lightweight, bloat-free Windows 11 installations! Their Tiny11Builder provided the foundation and methodology that made this Linux-based implementation possible.
+Kudos to ntdevlabs for their pioneering work in creating lightweight, bloat-free Windows 11 installations. Their Tiny11Builder provided the foundation and methodology that made this Linux-based implementation possible.
 
 ### Our Implementation
 - Adapts the Tiny11Builder PowerShell workflow to pure bash for Linux systems
@@ -49,9 +49,9 @@ Tiny11 Attribution
 
 Safety notes
 ------------
-- Do not run on production machines without a tested backup/restore plan.
-- Double-check `/etc/default/grub` and target disk; GRUB edits are host-wide.
-- Secure Boot must be disabled for the GRUB chainloader. If chainload fails, consider wimboot/iPXE as a fallback (not implemented here).
+- Don't run this on a production machine unless you have a solid backup and restore plan.
+- Double-check `/etc/default/grub` and your target disk. GRUB changes affect the entire system.
+- Secure Boot must be disabled for the GRUB chainloader to work. If chainloading fails, you might want to look into wimboot or iPXE as alternatives (though those aren't implemented here yet).
 
 Quickstart
 ----------
@@ -80,11 +80,11 @@ sudo ./scripts/reboot_to_installer.sh
 make check && make fetch && make trim && sudo make grub
 ```
 
-Testing / dry runs
+Testing & dry runs
 ------------------
-- `scripts/fetch_iso.sh --dry-run` will show the build ID and download plan.
-- `grub_entry.sh` uses `grub-script-check` when available before touching grub.cfg.
-- Consider mounting `out/win11.iso` and `boot.wim` with 7z/wimlib to verify structure before GRUB changes.
+- Run `scripts/fetch_iso.sh --dry-run` to see what build ID and download plan would be used
+- The `grub_entry.sh` script uses `grub-script-check` (when available) before modifying grub.cfg
+- You might want to mount `out/win11.iso` and check `boot.wim` with 7z or wimlib to verify everything looks right before making GRUB changes
 
 Available scripts
 -----------------

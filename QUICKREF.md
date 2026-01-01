@@ -162,11 +162,11 @@ sudo pacman -S aria2 cabextract wimlib p7zip
 
 ## Safety Reminders
 
-- ⚠️ **Secure Boot must be disabled**
-- ⚠️ **Test in VM first**
-- ⚠️ **Backup important data**
-- ⚠️ **Double-check disk selection in Windows installer**
-- ⚠️ **GRUB changes affect all OS boots**
+- Secure Boot must be disabled
+- Test in VM first
+- Backup important data
+- Double-check disk selection in Windows installer
+- GRUB changes affect all OS boots
 
 ## Getting Help
 

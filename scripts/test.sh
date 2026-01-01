@@ -10,8 +10,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PASS=0
 FAIL=0
 
-msg() { echo "[✓] $*"; }
-err() { echo "[✗] $*" >&2; }
+msg() { echo "[OK] $*"; }
+err() { echo "[FAIL] $*" >&2; }
 info() { echo "[i] $*"; }
 
 test_syntax() {
