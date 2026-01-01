@@ -13,6 +13,11 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+TMP_DIR="${TMP_DIR:-$ROOT_DIR/tmp}"
+mkdir -p "$TMP_DIR"
+
+UUP_PARSE_LOG="$TMP_DIR/uup_parse_error.log"
+: >"$UUP_PARSE_LOG"
 
 source "$SCRIPT_DIR/lib_error.sh" 2>/dev/null || {
   echo "[!] Error: Cannot load error handling library" >&2
@@ -21,6 +26,15 @@ source "$SCRIPT_DIR/lib_error.sh" 2>/dev/null || {
 
 msg() { echo "[+] $*"; }
 warn() { echo "[!] $*" >&2; }
+log_uup_issue() {
+  local title="$1"
+  local details="${2:-}"
+  {
+    echo "[$(date -Ins)] $title"
+    [[ -n "$details" ]] && printf "%s\n" "$details"
+    echo ""
+  } >>"$UUP_PARSE_LOG"
+}
 
 prompt_yn() {
   local prompt="$1"
@@ -135,81 +149,24 @@ prefetch_build_data() {
     echo "  Waiting 10s before querying build details..."
     sleep 10
     
-    local detail_api="https://api.uupdump.net/get.php?id=${update_id}"
-    local detail_json
-    detail_json="$(curl -fsSL "$detail_api" 2>&1)" || {
-      echo "    Could not fetch details (network error)"
-      continue
-    }
-    
-    # Check if response is empty
-    if [[ -z "$detail_json" ]]; then
-      echo "    API returned empty response (rate limiting or connection issue)"
+    local editions="" languages="" is_insider="false"
+    if query_build_details "$update_id" "editions" "languages" "quiet"; then
+      if [[ "$languages" == "INSIDER_BUILD" ]]; then
+        is_insider="true"
+      fi
+    else
+      echo "    Could not parse details (check $UUP_PARSE_LOG)"
       continue
     fi
     
-    # Check for rate limit error or API errors
-    if echo "$detail_json" | grep -qi "rate.limited\|RATE_LIMIT"; then
-      echo "    Rate limited - skipping details for this build"
+    if [[ "$is_insider" == "true" ]]; then
+      echo "    Insider build detected (single language/edition)"
+      BUILD_CACHE_EDITIONS["$cache_key"]="INSIDER_BUILD"
+      BUILD_CACHE_LANGUAGES["$cache_key"]="INSIDER_BUILD"
       continue
     fi
     
-    # Check if response is too small (likely an error)
-    local json_size=${#detail_json}
-    if [[ $json_size -lt 100 ]]; then
-      echo "    API returned error: $detail_json"
-      continue
-    fi
-    
-    # Parse both editions and languages in one call with better error reporting
-    local parse_result
-    parse_result="$(echo "$detail_json" | python3 <<'PY'
-import json, sys
-try:
-    input_data = sys.stdin.read().strip()
-    if not input_data:
-        print("Empty API response", file=sys.stderr)
-        sys.exit(1)
-    
-    data = json.loads(input_data)
-    response = data.get("response", {})
-    
-    # Check for API errors
-    if "error" in response:
-        print(f"API Error: {response.get('error', 'unknown')}", file=sys.stderr)
-        sys.exit(1)
-    
-    editions = response.get("editionFancyNames", {})
-    langs = response.get("langList", [])
-    
-    if not editions:
-        print("No editions found in response", file=sys.stderr)
-        sys.exit(1)
-    if not langs:
-        print("No languages found in response", file=sys.stderr)
-        sys.exit(1)
-    
-    editions_str = "\n".join(editions.keys())
-    langs_str = "\n".join(langs)
-    print(f"{editions_str}|||{langs_str}")
-    
-except json.JSONDecodeError as e:
-    print(f"JSON decode error: {e}", file=sys.stderr)
-    sys.exit(1)
-except Exception as e:
-    print(f"Parse error: {e}", file=sys.stderr)
-    sys.exit(1)
-PY
-)" 2>&1 | tee /tmp/uup_parse_error.log || {
-      echo "    Could not parse details (check /tmp/uup_parse_error.log)"
-      continue
-    }
-    
-    # Cache the results
-    local editions="${parse_result%|||*}"
-    local languages="${parse_result#*|||}"
-    
-    if [[ -n "$editions" && -n "$languages" && "$editions" != "$parse_result" ]]; then
+    if [[ -n "$editions" && -n "$languages" ]]; then
       BUILD_CACHE_EDITIONS["$cache_key"]="$editions"
       BUILD_CACHE_LANGUAGES["$cache_key"]="$languages"
       local ed_count=$(echo "$editions" | wc -l)
@@ -306,30 +263,38 @@ query_build_details() {
   local update_id="$1"
   local editions_var="$2"
   local languages_var="$3"
+  local quiet="${4:-}"
   
-  msg "Querying available editions and languages..."
+  if [[ "$quiet" != "quiet" ]]; then
+    msg "Querying available editions and languages..."
+  fi
   
   # First, query available languages using listlangs.php
-  echo "  Waiting 10s before querying languages..."
+  if [[ "$quiet" != "quiet" ]]; then
+    echo "  Waiting 10s before querying languages..."
+  fi
   sleep 10
   
   local langs_api="https://api.uupdump.net/listlangs.php?id=${update_id}"
   local langs_json
   langs_json="$(curl -fsSL "$langs_api" 2>&1)" || {
-    warn "Could not query languages (network error)"
+    log_uup_issue "listlangs request failed for ${update_id}" "$langs_json"
+    [[ "$quiet" == "quiet" ]] || warn "Could not query languages (network error)"
     return 1
   }
   
   # Check if response is empty
   if [[ -z "$langs_json" ]]; then
-    warn "Languages API returned empty response (rate limiting or connection issue)"
+    log_uup_issue "listlangs empty response for ${update_id}" "$langs_json"
+    [[ "$quiet" == "quiet" ]] || warn "Languages API returned empty response (rate limiting or connection issue)"
     return 1
   fi
   
   # Check response size
   local json_size=${#langs_json}
   if [[ $json_size -lt 20 ]]; then
-    warn "Languages API returned small response ($json_size bytes)"
+    log_uup_issue "listlangs small response for ${update_id}" "$langs_json"
+    [[ "$quiet" == "quiet" ]] || warn "Languages API returned small response ($json_size bytes)"
     return 1
   fi
   
@@ -370,39 +335,42 @@ except Exception as e:
 PY
 )" 2>"$parse_error" || {
     local err_msg=$(cat "$parse_error" 2>/dev/null)
+    log_uup_issue "listlangs parse error for ${update_id}" "Error: ${err_msg}\nResponse:\n${langs_json}"
     if [[ "$err_msg" == *"INSIDER_BUILD"* ]]; then
-      # This build doesn't support language selection (Insider build)
-      echo "INSIDER_BUILD"
+      [[ -n "$languages_var" ]] && eval "$languages_var='INSIDER_BUILD'"
       rm -f "$parse_error"
       return 0
     fi
-    warn "Could not parse languages: $err_msg"
+    [[ "$quiet" == "quiet" ]] || warn "Could not parse languages: $err_msg (see $UUP_PARSE_LOG)"
     rm -f "$parse_error"
     return 1
   }
   rm -f "$parse_error"
   
   if [[ "$langs_list" == "INSIDER_BUILD" ]]; then
-    # This is an Insider build with no edition/language options
-    echo "INSIDER_BUILD"
+    [[ -n "$languages_var" ]] && eval "$languages_var='INSIDER_BUILD'"
     return 0
   fi
   
   # Now query available editions using listeditions.php with the first language
   local first_lang=$(echo "$langs_list" | head -1)
-  echo "  Waiting 10s before querying editions..."
+  if [[ "$quiet" != "quiet" ]]; then
+    echo "  Waiting 10s before querying editions..."
+  fi
   sleep 10
   
   local eds_api="https://api.uupdump.net/listeditions.php?lang=${first_lang}&id=${update_id}"
   local eds_json
   eds_json="$(curl -fsSL "$eds_api" 2>&1)" || {
-    warn "Could not query editions (network error)"
+    log_uup_issue "listeditions request failed for ${update_id} (lang=${first_lang})" "$eds_json"
+    [[ "$quiet" == "quiet" ]] || warn "Could not query editions (network error)"
     return 1
   }
   
   # Check if response is empty
   if [[ -z "$eds_json" ]]; then
-    warn "Editions API returned empty response (rate limiting or connection issue)"
+    log_uup_issue "listeditions empty response for ${update_id} (lang=${first_lang})" "$eds_json"
+    [[ "$quiet" == "quiet" ]] || warn "Editions API returned empty response (rate limiting or connection issue)"
     return 1
   fi
   
@@ -441,7 +409,9 @@ except Exception as e:
     sys.exit(1)
 PY
 )" 2>"$parse_error" || {
-    warn "Could not parse editions: $(cat "$parse_error")"
+    local err_msg=$(cat "$parse_error" 2>/dev/null)
+    log_uup_issue "listeditions parse error for ${update_id} (lang=${first_lang})" "Error: ${err_msg}\nResponse:\n${eds_json}"
+    [[ "$quiet" == "quiet" ]] || warn "Could not parse editions: $err_msg (see $UUP_PARSE_LOG)"
     rm -f "$parse_error"
     return 1
   }
@@ -555,17 +525,17 @@ step_fetch_iso() {
       if [[ -n "$available_editions" && -n "$available_languages" ]]; then
         echo "  Available editions: $(echo "$available_editions" | wc -l) found"
         echo "  Available languages: $(echo "$available_languages" | wc -l) found"
+        if [[ "$available_languages" == "INSIDER_BUILD" ]]; then
+          is_insider_build="true"
+        fi
       fi
     else
       # Not in cache, query fresh with retry
       local retry_count=0
       local max_retries=2
       while [[ $retry_count -lt $max_retries ]]; do
-        local result
-        result=$(query_build_details "$captured_update_id" "available_editions" "available_languages")
-        if [[ $? -eq 0 ]]; then
-          # Check if it's an Insider build
-          if [[ "$result" == "INSIDER_BUILD" ]]; then
+        if query_build_details "$captured_update_id" "available_editions" "available_languages"; then
+          if [[ "$available_languages" == "INSIDER_BUILD" ]]; then
             is_insider_build="true"
             echo "  This is an Insider Preview build (single edition, single language)"
             break
