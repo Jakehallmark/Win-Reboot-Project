@@ -61,11 +61,23 @@ detect_latest_update_id() {
   json="$(curl -fsSL "$api" 2>&1)" || 
     fatal_error "Failed to reach UUP dump API" 20 "Could not connect to api.uupdump.net"
   
+  # Check if response is valid JSON before parsing
+  if ! echo "$json" | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
+    echo "[DEBUG] API Response: $json" >&2
+    fatal_error "UUP dump API returned invalid response" 20 "API may be rate limiting or experiencing issues. Try again in a few moments."
+  fi
+  
   UPDATE_ID="$(python3 - "$json" <<'PY'
 import json,sys
 try:
     data=json.loads(sys.stdin.read())
     response=data.get("response",{})
+    
+    # Check for API errors
+    if "error" in response:
+        print(f"API Error: {response['error']}", file=sys.stderr)
+        sys.exit(1)
+    
     update_id=response.get("updateId","")
     if not update_id:
         sys.exit(1)
@@ -74,7 +86,7 @@ except Exception as e:
     print(f"Error parsing JSON: {e}", file=sys.stderr)
     sys.exit(1)
 PY
-)" || fatal_error "Could not parse update ID from UUP dump response" 20 "API response may be invalid"
+)" || fatal_error "Could not parse update ID from UUP dump response" 20 "API response may be invalid or rate limited. Wait a moment and retry."
   
   [[ -n "$UPDATE_ID" ]] || fatal_error "Empty update ID received" 20 "UUP dump may not have builds available"
 }

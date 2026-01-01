@@ -81,6 +81,7 @@ check_dependencies() {
 query_available_builds() {
   local channel="$1"
   local arch="$2"
+  local var_name="$3"  # Variable name to store update ID
   
   msg "Querying available builds from UUP dump..."
   
@@ -104,6 +105,12 @@ query_available_builds() {
   
   echo "  Found: $build_title"
   echo "  Build ID: $update_id"
+  
+  # Store update ID in the named variable
+  if [[ -n "$var_name" ]]; then
+    eval "$var_name='$update_id'"
+  fi
+  
   return 0
 }
 
@@ -173,7 +180,8 @@ step_fetch_iso() {
     echo ""
     
     # Query what's actually available for selected channel/arch
-    if query_available_builds "$selected_channel" "$selected_arch"; then
+    local captured_update_id=""
+    if query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
       echo ""
       msg "The following build is available and will be downloaded"
     else
@@ -184,6 +192,11 @@ step_fetch_iso() {
     
     fetch_args+=(--channel "$selected_channel")
     fetch_args+=(--arch "$selected_arch")
+    
+    # If we got an update ID, use it to avoid re-querying API
+    if [[ -n "$captured_update_id" ]]; then
+      fetch_args+=(--update-id "$captured_update_id")
+    fi
     
     # Edition selection
     echo "Select Edition:"
