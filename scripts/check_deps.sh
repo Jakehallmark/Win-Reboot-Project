@@ -264,11 +264,12 @@ main() {
     [[ $SILENT -eq 0 ]] && msg "Found: grub-mkconfig or grub2-mkconfig"
   fi
   
-  # Optional but recommended
+  # Registry tool required for Tiny11 bypass tweaks
   if ! command -v hivexregedit >/dev/null 2>&1; then
-    [[ $SILENT -eq 0 ]] && warn "Optional: hivexregedit not found (registry tweaks will be skipped)"
+    MISSING+=("hivexregedit")
+    [[ $SILENT -eq 0 ]] && warn "Missing: hivexregedit (registry bypass tweaks for Tiny11)"
   else
-    [[ $SILENT -eq 0 ]] && msg "Found: hivexregedit (optional)"
+    [[ $SILENT -eq 0 ]] && msg "Found: hivexregedit"
   fi
   
   echo ""

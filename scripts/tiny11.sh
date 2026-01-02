@@ -95,7 +95,7 @@ build_removal_list() {
 }
 
 ensure_tools() {
-  require_commands 7z wimlib-imagex
+  require_commands 7z wimlib-imagex hivexregedit
   
   if command -v xorriso >/dev/null 2>&1; then
     ISO_TOOL="xorriso"
@@ -104,12 +104,6 @@ ensure_tools() {
   else
     fatal_error "Need xorriso or genisoimage to rebuild ISO" 10 \
       "Install one of these packages: xorriso or genisoimage"
-  fi
-  
-  if ! command -v hivexregedit >/dev/null 2>&1; then
-    warn "hivexregedit not found; registry bypass tweaks will be skipped"
-    warn "Install libhivex-bin (Debian/Ubuntu) or hivex (Fedora/Arch) for registry tweaks"
-    SKIP_REG=1
   fi
 }
 
