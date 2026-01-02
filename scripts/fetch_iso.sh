@@ -68,7 +68,7 @@ Notes:
 EOF
 }
 
-msg() { echo "[+] $*"; }
+msg() { echo "[+] $*" >&2; }
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
@@ -141,11 +141,12 @@ download_package_zip() {
   register_temp_file "$zip_path"
   
   local get_url="https://uupdump.net/get.php?id=${UPDATE_ID}&pack=${LANG}&edition=${EDITIONS}&aria2=2"
-  msg "Downloading UUP dump package: $get_url"
+  echo "[+] Downloading UUP dump package: $get_url" >&2
   
-  curl -fL "$get_url" -o "$zip_path" 2>&1 || 
+  if ! curl -L "$get_url" -o "$zip_path" >&2; then
     fatal_error "Failed to download UUP dump package" 20 \
       "Check network connection and try again"
+  fi
   
   # Check if we got an error response (HTML/text instead of ZIP)
   local file_size
@@ -167,20 +168,42 @@ download_package_zip() {
       "Received only $file_size bytes. Expected > 1KB. May be rate limited or invalid parameters."
   fi
   
-  # Check if the file is actually a ZIP archive
-  if ! file "$zip_path" | grep -qi "zip\|compress"; then
+  # Check if the file is actually a ZIP archive (use -b to get only the description, not the filename)
+  if ! file -b "$zip_path" | grep -qi "zip\|compress"; then
     local file_type
     file_type=$(file -b "$zip_path")
-    echo "[DEBUG] File type: $file_type" >&2
     
-    # Check if it's an aria2 input file (text file with URLs)
-    if [[ "$file_type" == *"ASCII text"* ]] || [[ "$file_type" == *"text"* ]]; then
+    # Check if it's an error response (HTML, aria2, or plain text)
+    if [[ "$file_type" == *"HTML"* ]] || [[ "$file_type" == *"text"* ]]; then
       local content_preview
       content_preview=$(head -c 500 "$zip_path")
-      if [[ "$content_preview" == http* ]]; then
-        fatal_error "UUP dump returned aria2 file instead of package" 20 \
-          "The download link may have expired or the build ID is invalid. This usually means the specified update ID is too old or no longer available. Try without --update-id to fetch the latest build automatically."
-      fi
+      
+      echo "" >&2
+      echo "╔═══════════════════════════════════════════════════════════════╗" >&2
+      echo "║                    BUILD UNAVAILABLE                          ║" >&2
+      echo "╚═══════════════════════════════════════════════════════════════╝" >&2
+      echo "" >&2
+      echo "Error: Build ID $UPDATE_ID has expired or is not available" >&2
+      echo "" >&2
+      echo "The UUP dump service returned: $file_type" >&2
+      echo "" >&2
+      echo "This typically happens when:" >&2
+      echo "  - The build is too old" >&2
+      echo "  - The packaging server is down" >&2
+      echo "  - The edition/language combination is not available" >&2
+      echo "" >&2
+      echo "RECOMMENDED SOLUTIONS:" >&2
+      echo "" >&2
+      echo "1. Run interactive setup (auto-detects latest build):" >&2
+      echo "   ./scripts/interactive_setup.sh" >&2
+      echo "" >&2
+      echo "2. Try Release Preview channel (usually more available):" >&2
+      echo "   ./scripts/fetch_iso.sh --channel rp" >&2
+      echo "" >&2
+      echo "3. Check UUP dump website for available builds:" >&2
+      echo "   https://uupdump.net" >&2
+      echo "" >&2
+      exit 20
     fi
     
     fatal_error "Downloaded file is not a ZIP archive" 20 \
