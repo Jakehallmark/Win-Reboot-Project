@@ -5,6 +5,22 @@ Win-Reboot-Project
 
 A collection of tools to download a fresh Windows 11 ISO from Microsoft (via UUP dump), optionally trim it down Tiny11-style on Linux, and add a GRUB menu entry so you can boot straight into the installer without needing a USB drive. Note that Secure Boot needs to be disabled for the GRUB loopback method to work.
 
+## Quick Start (Standalone)
+
+**New!** Use the all-in-one script for the simplest experience:
+
+```bash
+git clone https://github.com/Jakehallmark/Win-Reboot-Project.git
+cd Win-Reboot-Project
+./win11-setup.sh
+```
+
+See [README-STANDALONE.md](README-STANDALONE.md) for details.
+
+## Advanced Usage (Modular Scripts)
+
+The project also includes modular scripts in the `scripts/` directory for advanced users. See below for details.
+
 Status
 ------
 - All scripts are ready to use. No binaries are included - everything downloads directly from Microsoft's CDN through the UUP dump helper.
