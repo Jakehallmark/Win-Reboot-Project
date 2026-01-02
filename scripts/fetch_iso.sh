@@ -171,10 +171,10 @@ download_package_zip() {
     
     # Check if it's an error response (HTML, aria2, or plain text)
     if [[ "$file_type" == *"HTML"* ]] || [[ "$file_type" == *"text"* ]]; then
-      return 2  # Build unavailable - will be retried with different channel
+      return 1  # Build unavailable - return error
     fi
     
-    return 2  # Non-ZIP file
+    return 1  # Non-ZIP file
   fi
   
   verify_file "$zip_path" 0 "UUP dump package"
@@ -220,81 +220,33 @@ main() {
   # Check prerequisites
   require_commands unzip aria2c curl python3
   
-  # Try to download with current channel, then retry with Release Preview if it fails
-  local original_channel="$CHANNEL"
-  local attempt=1
-  local max_attempts=2
+  # Detect or use provided update ID
+  [[ -n "$UPDATE_ID" ]] || detect_latest_update_id
+  msg "Using update ID: $UPDATE_ID"
   
-  while [[ $attempt -le $max_attempts ]]; do
-    msg "Download attempt $attempt/$max_attempts (channel: $CHANNEL)"
-    echo "" >&2
-    
-    # Detect or use provided update ID
-    [[ -n "$UPDATE_ID" ]] || detect_latest_update_id
-    msg "Using update ID: $UPDATE_ID"
-    
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-      echo "Dry run only. Would fetch: id=$UPDATE_ID lang=$LANG editions=$EDITIONS arch=$ARCH channel=$CHANNEL"
-      echo "Estimated download size: ~5-6 GB"
-      echo "Output location: $OUT_DIR/win11.iso"
-      exit 0
-    fi
-    
-    # Try to download and extract package
-    local zip_path
-    if zip_path="$(download_package_zip)"; then
-      # Success! Continue with extraction
-      local pkg_dir="$TMP_DIR/uupdump-${UPDATE_ID}"
-      rm -rf "$pkg_dir"
-      
-      msg "Extracting UUP dump package..."
-      unzip -q "$zip_path" -d "$pkg_dir" 2>&1 || 
-        fatal_error "Failed to extract package" 40 "ZIP file may be corrupted"
-      
-      [[ -x "$pkg_dir/uup_download_linux.sh" ]] || chmod +x "$pkg_dir/uup_download_linux.sh"
-      
-      # Run the build process
-      run_uupdump_package "$pkg_dir"
-      return 0  # Success
-    else
-      local download_result=$?
-      if [[ $download_result -eq 2 ]] && [[ $attempt -lt $max_attempts ]] && [[ "$CHANNEL" != "rp" ]]; then
-        # Build unavailable (error 2) - retry with Release Preview channel
-        msg "Current channel returned unavailable build, trying Release Preview..."
-        CHANNEL="rp"
-        UPDATE_ID=""  # Reset to detect new ID for new channel
-        ((attempt++))
-        echo "" >&2
-        continue
-      else
-        # Network error or max attempts reached
-        echo "" >&2
-        echo "╔═══════════════════════════════════════════════════════════════╗" >&2
-        echo "║           UUP DUMP SERVICE TEMPORARILY UNAVAILABLE            ║" >&2
-        echo "╚═══════════════════════════════════════════════════════════════╝" >&2
-        echo "" >&2
-        echo "All available channels are returning unavailable builds." >&2
-        echo "" >&2
-        echo "This usually means:" >&2
-        echo "  - The UUP dump service is experiencing issues" >&2
-        echo "  - All current builds are too old to be packaged" >&2
-        echo "  - The service is performing maintenance" >&2
-        echo "" >&2
-        echo "SUGGESTIONS:" >&2
-        echo "" >&2
-        echo "1. Wait a few minutes and try again:" >&2
-        echo "   ./scripts/fetch_iso.sh" >&2
-        echo "" >&2
-        echo "2. Check UUP dump status:" >&2
-        echo "   https://uupdump.net" >&2
-        echo "" >&2
-        echo "3. Use a known working build ID (if you have one):" >&2
-        echo "   ./scripts/fetch_iso.sh --update-id <BUILD_ID>" >&2
-        echo "" >&2
-        exit 20
-      fi
-    fi
-  done
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "Dry run only. Would fetch: id=$UPDATE_ID lang=$LANG editions=$EDITIONS arch=$ARCH channel=$CHANNEL"
+    echo "Estimated download size: ~5-6 GB"
+    echo "Output location: $OUT_DIR/win11.iso"
+    exit 0
+  fi
+  
+  # Download and extract package
+  local zip_path
+  zip_path="$(download_package_zip)" || fatal_error "Failed to download ISO" 20 \
+    "Check your options and network connection. Visit https://uupdump.net to manually find a working build ID and use --update-id"
+  
+  local pkg_dir="$TMP_DIR/uupdump-${UPDATE_ID}"
+  rm -rf "$pkg_dir"
+  
+  msg "Extracting UUP dump package..."
+  unzip -q "$zip_path" -d "$pkg_dir" 2>&1 || 
+    fatal_error "Failed to extract package" 40 "ZIP file may be corrupted"
+  
+  [[ -x "$pkg_dir/uup_download_linux.sh" ]] || chmod +x "$pkg_dir/uup_download_linux.sh"
+  
+  # Run the build process
+  run_uupdump_package "$pkg_dir"
 }
 
 main "$@"
