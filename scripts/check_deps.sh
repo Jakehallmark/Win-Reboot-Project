@@ -70,13 +70,16 @@ get_packages_for_distro() {
   case "$distro" in
     debian|ubuntu|linuxmint|pop)
       # Note: Debian/Ubuntu use python3-hivex for registry editing (hivexregedit not available)
-      echo "aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex chntpw"
+      # Use xorriso for better EFI boot support on ISO creation
+      echo "aria2 cabextract wimtools xorriso p7zip-full grub-common curl python3 unzip python3-hivex chntpw"
       ;;
     fedora|rhel|centos|rocky|almalinux)
-      echo "aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex chntpw"
+      # Use xorriso for better EFI boot support on ISO creation
+      echo "aria2 cabextract wimlib-utils xorriso p7zip p7zip-plugins grub2-tools curl python3 unzip hivex chntpw"
       ;;
     arch|manjaro|endeavouros)
-      echo "aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex chntpw"
+      # Use xorriso for better EFI boot support on ISO creation
+      echo "aria2 cabextract wimlib xorriso p7zip grub curl python3 hivex chntpw"
       ;;
     *)
       echo ""
@@ -180,19 +183,19 @@ show_manual_instructions() {
     debian|ubuntu|linuxmint|pop)
       echo "For Debian/Ubuntu-based systems, copy and paste this:"
       echo ""
-      echo "  sudo apt update && sudo apt install -y aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex chntpw"
+      echo "  sudo apt update && sudo apt install -y aria2 cabextract wimtools xorriso p7zip-full grub-common curl python3 unzip python3-hivex chntpw"
       echo ""
       ;;
     fedora|rhel|centos|rocky|almalinux)
       echo "For Fedora/RHEL-based systems, copy and paste this:"
       echo ""
-      echo "  sudo dnf install -y aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex chntpw"
+      echo "  sudo dnf install -y aria2 cabextract wimlib-utils xorriso p7zip p7zip-plugins grub2-tools curl python3 unzip hivex chntpw"
       echo ""
       ;;
     arch|manjaro|endeavouros)
       echo "For Arch-based systems (because of course you use Arch):"
       echo ""
-      echo "  sudo pacman -S aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex chntpw"
+      echo "  sudo pacman -S aria2 cabextract wimlib xorriso p7zip grub curl python3 hivex chntpw"
       echo ""
       ;;
     *)
