@@ -142,7 +142,10 @@ download_package_zip() {
   register_temp_file "$zip_path"
   
   local get_url="https://uupdump.net/get.php?id=${UPDATE_ID}&pack=${LANG}&edition=${EDITIONS}"
-  echo "[+] Downloading UUP dump package: $get_url" >&2
+  echo "[+] Note: Automated ZIP download from UUP dump may not work reliably" >&2
+  echo "[+] If this fails, manually download from: https://uupdump.net" >&2
+  echo "[+] Then run the script again and provide the path to the downloaded ZIP file" >&2
+  echo "[+] Attempting download from: $get_url" >&2
   
   if ! curl -L "$get_url" -o "$zip_path" >&2; then
     return 1  # Network error - will be retried
