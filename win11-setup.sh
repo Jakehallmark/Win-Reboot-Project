@@ -208,15 +208,28 @@ step_tiny11() {
   msg "Extracting ISO..."
   xorriso -osirrox on -indev "$ISO_PATH" -extract / "$iso_mount" 2>/dev/null || err "Failed to extract ISO"
   
-  local wim_file="$iso_mount/sources/install.wim"
-  [[ -f "$wim_file" ]] || wim_file="$iso_mount/sources/install.esd"
-  [[ -f "$wim_file" ]] || err "No install.wim or install.esd found"
+  # Find install.wim or install.esd (case-insensitive)
+  local wim_file=""
+  wim_file=$(find "$iso_mount" -type f -iname "install.wim" -o -iname "install.esd" | head -n1)
   
-  if [[ "$wim_file" == *.esd ]]; then
+  if [[ -z "$wim_file" ]]; then
+    warn "Cannot find install.wim or install.esd"
+    warn "ISO contents:"
+    ls -la "$iso_mount/" || true
+    [[ -d "$iso_mount/sources" ]] && ls -la "$iso_mount/sources/" || true
+    err "No install.wim or install.esd found in ISO"
+  fi
+  
+  msg "Found WIM file: $wim_file"
+  
+  if [[ "$wim_file" == *.esd || "$wim_file" == *.ESD ]]; then
     msg "Converting ESD to WIM..."
-    wimlib-imagex export "$wim_file" all "$iso_mount/sources/install.wim" --compress=LZX --check || err "ESD conversion failed"
+    local wim_dir="$(dirname "$wim_file")"
+    local new_wim="$wim_dir/install.wim"
+    wimlib-imagex export "$wim_file" all "$new_wim" --compress=LZX --check || err "ESD conversion failed"
     rm "$wim_file"
-    wim_file="$iso_mount/sources/install.wim"
+    wim_file="$new_wim"
+    msg "Converted to: $wim_file"
   fi
   
   local image_count
