@@ -107,15 +107,14 @@ extract_url_params() {
   fi
   
   # Extract edition (optional but expected)
-  # Handle URL encoding (e.g., %3B = semicolon) and extract first edition if multiple
+  # Handle URL encoding (e.g., %3B = semicolon) and preserve all editions for multi-edition ISOs
   if [[ "$url" =~ edition=([a-zA-Z0-9_%]+) ]]; then
     local raw_edition="${BASH_REMATCH[1]}"
     # URL decode common characters
     raw_edition="${raw_edition//%3B/;}"
     raw_edition="${raw_edition//%3b/;}"
-    # Take first edition if semicolon-separated (e.g., "core;professional" -> "core")
-    local first_edition="${raw_edition%%;*}"
-    eval "$edition_var='$first_edition'"
+    # Keep all editions (e.g., "core;professional" stays as "core;professional")
+    eval "$edition_var='$raw_edition'"
   fi
   
   return 0
@@ -160,11 +159,11 @@ To get started, you need to find a Windows 11 build on UUP dump:
 
 The URL will look like one of these:
   https://uupdump.net/download.php?id=BUILD_ID&pack=en-us&edition=professional
-  https://uupdump.net/getfiles.php?id=BUILD_ID&pack=en-us&edition=professional
+  https://uupdump.net/download.php?id=BUILD_ID&pack=en-us&edition=core;professional
 
-Note: If you see multiple editions (e.g., core;professional), the script will 
-use the first one. To choose a specific edition, select it on the UUP dump 
-website before copying the URL.
+Note: UUP dump allows you to create multi-edition ISOs. If you see multiple 
+editions separated by semicolons (e.g., core;professional), the script will 
+create an ISO containing all selected editions.
 
 EOF
   
@@ -187,7 +186,15 @@ EOF
   msg "Extracted parameters from URL:"
   echo "  Build ID: $build_id"
   [[ -n "$language" ]] && echo "  Language: $language" || echo "  Language: (not specified)"
-  [[ -n "$edition" ]] && echo "  Edition: $edition" || echo "  Edition: (not specified)"
+  if [[ -n "$edition" ]]; then
+    if [[ "$edition" == *";"* ]]; then
+      echo "  Editions: $edition (multi-edition ISO)"
+    else
+      echo "  Edition: $edition"
+    fi
+  else
+    echo "  Edition: (not specified)"
+  fi
   echo ""
   
   # Verify the build exists
