@@ -31,10 +31,22 @@ fetch:
 	@./scripts/fetch_iso.sh
 
 trim:
+	@if [ ! -f out/win11.iso ]; then \
+		echo "[!] Error: out/win11.iso not found. Run 'make fetch' first."; \
+		exit 1; \
+	fi
 	@./scripts/tiny11.sh out/win11.iso --preset minimal
 
 grub:
-	@./scripts/grub_entry.sh out/win11.iso
+	@if [ ! -f out/win11.iso ] && [ ! -f out/win11-tiny.iso ]; then \
+		echo "[!] Error: No ISO found in out/. Run 'make fetch' first."; \
+		exit 1; \
+	fi
+	@if [ -f out/win11-tiny.iso ]; then \
+		./scripts/grub_entry.sh out/win11-tiny.iso; \
+	else \
+		./scripts/grub_entry.sh out/win11.iso; \
+	fi
 
 reboot:
 	@./scripts/reboot_to_installer.sh

@@ -71,13 +71,13 @@ EOF
   # Check dependencies
   msg "Quick Dependency Check:"
   local deps_ok=0
-  for cmd in aria2c cabextract wimlib-imagex 7z curl python3 unzip; do
+  for cmd in aria2c cabextract wimlib-imagex 7z curl python3 unzip hivexregedit; do
     if command -v "$cmd" >/dev/null 2>&1; then
       deps_ok=$((deps_ok + 1))
     fi
   done
-  echo "  • $deps_ok/7 core dependencies found"
-  if [[ $deps_ok -lt 7 ]]; then
+  echo "  • $deps_ok/8 core dependencies found"
+  if [[ $deps_ok -lt 8 ]]; then
     echo "    Run: ./scripts/check_deps.sh for details"
   fi
   echo ""

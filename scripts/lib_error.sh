@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 # Common error handling and troubleshooting library for Win-Reboot-Project
 # Source this file in scripts: source "$(dirname "$0")/lib_error.sh"
@@ -108,18 +109,18 @@ show_troubleshooting() {
    ./scripts/check_deps.sh
 
 2. Install missing packages for your distribution:
-   
+
    Debian/Ubuntu:
-   sudo apt install aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip
-   
+   sudo apt install aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip libhivex-bin
+
    Fedora/RHEL:
-   sudo dnf install aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip
-   
+   sudo dnf install aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex
+
    Arch:
-   sudo pacman -S aria2 cabextract wimlib cdrtools p7zip grub curl python3
+   sudo pacman -S aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex
 
 3. Verify installation:
-   which aria2c wimlib-imagex 7z curl python3
+   which aria2c wimlib-imagex 7z curl python3 hivexregedit
 
 For more help, see: INSTALL.md
 EOF

@@ -675,6 +675,32 @@ step_fetch_iso() {
   fi
 
   echo ""
+  msg "Starting ISO download..."
+  echo ""
+
+  # Call fetch_iso.sh with collected arguments
+  if [[ ${#fetch_args[@]} -gt 0 ]]; then
+    if ! "$SCRIPT_DIR/fetch_iso.sh" "${fetch_args[@]}"; then
+      fatal_error "ISO download failed" 20 \
+        "Check network connection and try again. See error messages above."
+    fi
+  else
+    if ! "$SCRIPT_DIR/fetch_iso.sh"; then
+      fatal_error "ISO download failed" 20 \
+        "Check network connection and try again. See error messages above."
+    fi
+  fi
+
+  # Verify ISO was downloaded
+  if [[ ! -f "$ROOT_DIR/out/win11.iso" ]]; then
+    fatal_error "ISO file not found after download" 40 \
+      "Expected: $ROOT_DIR/out/win11.iso"
+  fi
+
+  local size_mb
+  size_mb=$(($(stat -c%s "$ROOT_DIR/out/win11.iso" 2>/dev/null || echo 0) / 1024 / 1024))
+  msg "ISO downloaded successfully: $size_mb MB"
+  echo ""
 }
 
 step_tiny11() {

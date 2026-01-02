@@ -69,13 +69,13 @@ get_packages_for_distro() {
   local distro="$1"
   case "$distro" in
     debian|ubuntu|linuxmint|pop)
-      echo "aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip"
+      echo "aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip libhivex-bin"
       ;;
     fedora|rhel|centos|rocky|almalinux)
-      echo "aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip"
+      echo "aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex"
       ;;
     arch|manjaro|endeavouros)
-      echo "aria2 cabextract wimlib cdrtools p7zip grub curl python3"
+      echo "aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex"
       ;;
     *)
       echo ""
@@ -179,19 +179,19 @@ show_manual_instructions() {
     debian|ubuntu|linuxmint|pop)
       echo "For Debian/Ubuntu-based systems, copy and paste this:"
       echo ""
-      echo "  sudo apt update && sudo apt install -y aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip"
+      echo "  sudo apt update && sudo apt install -y aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip libhivex-bin"
       echo ""
       ;;
     fedora|rhel|centos|rocky|almalinux)
       echo "For Fedora/RHEL-based systems, copy and paste this:"
       echo ""
-      echo "  sudo dnf install -y aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip"
+      echo "  sudo dnf install -y aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex"
       echo ""
       ;;
     arch|manjaro|endeavouros)
       echo "For Arch-based systems (because of course you use Arch):"
       echo ""
-      echo "  sudo pacman -S aria2 cabextract wimlib cdrtools p7zip grub curl python3"
+      echo "  sudo pacman -S aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex"
       echo ""
       ;;
     *)
@@ -204,21 +204,7 @@ show_manual_instructions() {
       ;;
   esac
   
-  echo "Optional but recommended (for registry tweaks):"
-  case "$distro" in
-    debian|ubuntu|linuxmint|pop)
-      echo "  sudo apt install libhivex-bin"
-      ;;
-    fedora|rhel|centos|rocky|almalinux)
-      echo "  sudo dnf install hivex"
-      ;;
-    arch|manjaro|endeavouros)
-      echo "  sudo pacman -S hivex"
-      ;;
-    *)
-      echo "  hivex or libhivex-bin (depending on your distro)"
-      ;;
-  esac
+  echo "Note: hivexregedit (libhivex-bin/hivex) is required for Tiny11 registry tweaks."
   
   echo ""
   echo "Once installed, run this script again or proceed with:"
@@ -243,6 +229,7 @@ main() {
   check_cmd "curl" "curl"
   check_cmd "python3" "python3"
   check_cmd "unzip" "unzip"
+  check_cmd "hivexregedit" "libhivex-bin/hivex"
   
   # ISO building tools (one of these)
   if ! command -v genisoimage >/dev/null 2>&1 && ! command -v xorriso >/dev/null 2>&1; then
@@ -264,13 +251,7 @@ main() {
     [[ $SILENT -eq 0 ]] && msg "Found: grub-mkconfig or grub2-mkconfig"
   fi
   
-  # Registry tool required for Tiny11 bypass tweaks
-  if ! command -v hivexregedit >/dev/null 2>&1; then
-    MISSING+=("hivexregedit")
-    [[ $SILENT -eq 0 ]] && warn "Missing: hivexregedit (registry bypass tweaks for Tiny11)"
-  else
-    [[ $SILENT -eq 0 ]] && msg "Found: hivexregedit"
-  fi
+  # Note: hivexregedit is already checked above with check_cmd
   
   echo ""
   
@@ -290,7 +271,7 @@ main() {
       msg "Dependencies installed successfully!"
       msg "Re-checking dependencies..."
       echo ""
-      # Re-check to verify installation
+      # Re-check to verify installation (all core tools)
       MISSING=()
       check_cmd "aria2c" "aria2"
       check_cmd "cabextract" "cabextract"
@@ -299,7 +280,20 @@ main() {
       check_cmd "curl" "curl"
       check_cmd "python3" "python3"
       check_cmd "unzip" "unzip"
-      
+      check_cmd "hivexregedit" "libhivex-bin/hivex"
+
+      # Re-check ISO building tools
+      if ! command -v genisoimage >/dev/null 2>&1 && ! command -v xorriso >/dev/null 2>&1; then
+        MISSING+=("genisoimage or xorriso")
+        [[ $SILENT -eq 0 ]] && warn "Missing: genisoimage or xorriso"
+      fi
+
+      # Re-check GRUB tools
+      if ! command -v grub-mkconfig >/dev/null 2>&1 && ! command -v grub2-mkconfig >/dev/null 2>&1; then
+        MISSING+=("grub-mkconfig")
+        [[ $SILENT -eq 0 ]] && warn "Missing: grub-mkconfig/grub2-mkconfig"
+      fi
+
       if [[ ${#MISSING[@]} -gt 0 ]]; then
         warn "Some packages still missing after installation attempt"
         return 1

@@ -104,14 +104,20 @@ detect_latest_update_id() {
   UPDATE_ID="$(python3 - "$json" <<'PY'
 import json,sys
 try:
-    data=json.loads(sys.stdin.read())
+    # JSON payload is passed as argv[1] to avoid stdin conflicts with heredocs
+    input_data = sys.argv[1].strip() if len(sys.argv) > 1 else ""
+    if not input_data:
+        print("Empty API response", file=sys.stderr)
+        sys.exit(1)
+
+    data=json.loads(input_data)
     response=data.get("response",{})
-    
+
     # Check for API errors
     if "error" in response:
         print(f"API Error: {response['error']}", file=sys.stderr)
         sys.exit(1)
-    
+
     update_id=response.get("updateId","")
     if not update_id:
         sys.exit(1)
