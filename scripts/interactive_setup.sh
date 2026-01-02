@@ -165,11 +165,12 @@ EOF
     fi
     
     local built_iso
-    built_iso="$(find "$pkg_dir" -maxdepth 1 -type f -name '*.iso' | head -n1)"
+    # Search for ISO file (case-insensitive - UUP dump can create .ISO or .iso)
+    built_iso="$(find "$pkg_dir" -maxdepth 1 -type f \( -iname '*.iso' \) | head -n1)"
     
     if [[ -z "$built_iso" ]]; then
       fatal_error "No ISO produced" 40 \
-        "Build completed but no ISO file found. Check $TMP_DIR/uup_build.log"
+        "Build completed but no ISO file found. Check $TMP_DIR/uup_build.log and $pkg_dir for files"
     fi
     
     mkdir -p "$ROOT_DIR/out"
