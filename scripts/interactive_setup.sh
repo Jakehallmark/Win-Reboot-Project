@@ -220,7 +220,7 @@ EOF
   
   # Add language if specified
   if [[ -n "$language" ]]; then
-    fetch_args+=(--language "$language")
+    fetch_args+=(--lang "$language")
   fi
   
   # Add edition if specified (normalize to lowercase)
