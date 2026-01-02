@@ -326,15 +326,32 @@ step_tiny11() {
 
 ask_bootloader() {
   echo ""
-  msg "Choose bootloader:"
-  echo "  1) GRUB (integrated with Linux)"
+  echo ""
+  msg "╔════════════════════════════════════════╗"
+  msg "║      Choose How to Boot Windows        ║"
+  msg "╚════════════════════════════════════════╝"
+  echo ""
+  echo "  1) GRUB (integrated with Linux bootloader)"
+  echo "     - Windows installer appears in GRUB menu"
+  echo "     - Still depends on Linux boot working"
+  echo ""
   echo "  2) Windows Bootloader (direct UEFI boot)"
+  echo "     - Boot directly without GRUB"
+  echo "     - Works even if Linux boot is broken"
+  echo "     - Change BIOS boot order to USB/disk"
   echo ""
   
   local answer
-  read -r -p "Select (1 or 2): " answer < /dev/tty
+  read -r -p "Select bootloader (1 or 2): " answer < /dev/tty
   
-  [[ "$answer" == "2" ]] && echo "windows" || echo "grub"
+  if [[ "$answer" == "2" ]]; then
+    echo "windows"
+  elif [[ "$answer" == "1" ]]; then
+    echo "grub"
+  else
+    warn "Invalid selection. Using GRUB (default)."
+    echo "grub"
+  fi
 }
 
 setup_usb() {
@@ -357,11 +374,12 @@ setup_usb() {
   
   [[ ${#devices[@]} -gt 0 ]] || err "No removable USB devices found"
   
+  echo ""
   local choice
   read -r -p "Select USB device (1-${#devices[@]}): " choice < /dev/tty
   
   [[ -n "$choice" ]] || err "No selection made"
-  [[ "$choice" -ge 1 && "$choice" -le ${#devices[@]} ]] || err "Invalid selection"
+  [[ "$choice" -ge 1 && "$choice" -le ${#devices[@]} ]] || err "Invalid selection (must be 1-${#devices[@]})"
   
   local selected="${devices[$((choice-1))]}"
   local usb_dev="${selected%%:*}"
@@ -407,11 +425,12 @@ setup_disk() {
   
   [[ ${#disks[@]} -gt 0 ]] || err "No additional disks available"
   
+  echo ""
   local choice
   read -r -p "Select disk (1-${#disks[@]}): " choice < /dev/tty
   
   [[ -n "$choice" ]] || err "No selection made"
-  [[ "$choice" -ge 1 && "$choice" -le ${#disks[@]} ]] || err "Invalid selection"
+  [[ "$choice" -ge 1 && "$choice" -le ${#disks[@]} ]] || err "Invalid selection (must be 1-${#disks[@]})"
   
   local selected="${disks[$((choice-1))]}"
   local disk_dev="${selected%%:*}"
@@ -472,10 +491,25 @@ step_media_setup() {
   echo ""
   
   cat <<'EOF'
-Choose installer media:
-  A) GRUB loopback (simple, ISO stays in /boot)
-  B) Dedicated disk (use another internal disk)
+Choose how to set up the Windows installer:
+
+  A) GRUB loopback (simple and fast)
+     - ISO stays in /boot
+     - Windows installer appears in GRUB menu
+     - Can't format disk with /boot during Windows install
+     - RECOMMENDED for most users
+
+  B) Dedicated internal disk (more flexible)
+     - Use another internal drive
+     - Can safely format ALL other disks
+     - Choose GRUB or Windows bootloader
+
   C) Bootable USB (most flexible)
+     - Create bootable USB drive
+     - Completely independent from Linux
+     - Can format ALL internal disks
+     - Requires USB drive with sufficient space
+
 EOF
   
   if prompt_yn "Use GRUB loopback? (Option A - recommended)" "y"; then
@@ -484,12 +518,12 @@ EOF
   fi
   
   echo ""
-  read -r -p "Select option (B/C): " choice < /dev/tty
+  read -r -p "Select option (B or C): " choice < /dev/tty
   
   case "${choice,,}" in
     b) setup_disk || { warn "Disk setup failed"; return 1; } ;;
     c) setup_usb || { warn "USB setup failed"; return 1; } ;;
-    *) err "Invalid option" ;;
+    *) err "Invalid option (must be B or C)" ;;
   esac
   
   echo ""
