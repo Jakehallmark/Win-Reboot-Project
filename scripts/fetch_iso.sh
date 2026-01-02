@@ -69,6 +69,7 @@ EOF
 }
 
 msg() { echo "[+] $*" >&2; }
+err() { echo "[!] Error: $*" >&2; }
 
 parse_args() {
   while [[ $# -gt 0 ]]; do

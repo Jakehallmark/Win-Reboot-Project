@@ -107,8 +107,15 @@ extract_url_params() {
   fi
   
   # Extract edition (optional but expected)
-  if [[ "$url" =~ edition=([a-zA-Z0-9_]+) ]]; then
-    eval "$edition_var='${BASH_REMATCH[1]}'"
+  # Handle URL encoding (e.g., %3B = semicolon) and extract first edition if multiple
+  if [[ "$url" =~ edition=([a-zA-Z0-9_%]+) ]]; then
+    local raw_edition="${BASH_REMATCH[1]}"
+    # URL decode common characters
+    raw_edition="${raw_edition//%3B/;}"
+    raw_edition="${raw_edition//%3b/;}"
+    # Take first edition if semicolon-separated (e.g., "core;professional" -> "core")
+    local first_edition="${raw_edition%%;*}"
+    eval "$edition_var='$first_edition'"
   fi
   
   return 0
@@ -149,11 +156,15 @@ To get started, you need to find a Windows 11 build on UUP dump:
   2. Click "Latest Dev Channel build" or search for a specific version
   3. Select your language (e.g., English (United States))
   4. Select your edition (e.g., Windows 11 Professional)
-  5. Click "Download and convert to ISO"
-  6. Copy the URL from your browser's address bar
+  5. On the download options page, copy the URL from your browser's address bar
 
-The URL will look like:
+The URL will look like one of these:
+  https://uupdump.net/download.php?id=BUILD_ID&pack=en-us&edition=professional
   https://uupdump.net/getfiles.php?id=BUILD_ID&pack=en-us&edition=professional
+
+Note: If you see multiple editions (e.g., core;professional), the script will 
+use the first one. To choose a specific edition, select it on the UUP dump 
+website before copying the URL.
 
 EOF
   
