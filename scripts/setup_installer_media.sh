@@ -79,19 +79,37 @@ get_available_space_gb() {
   df "$path" 2>/dev/null | tail -1 | awk '{print $4}' | xargs -I {} sh -c 'echo $(({} / 1024 / 1024))'
 }
 
-# Prompt yes/no
-prompt_yes_no() {
-  local prompt="$1"
-  local response
-  while true; do
-    read -p "$prompt (y/n): " response
-    case "$response" in
-      y|Y) return 0;;
-      n|N) return 1;;
-      *) echo "Please answer y or n";;
-    esac
-  done
+# Prompt bootloader choice for external media
+ask_bootloader_preference() {
+  local media_type="$1"  # "disk" or "usb"
+  
+  echo ""
+  msg "Choose how to boot the Windows installer:"
+  echo ""
+  echo "  Option 1) GRUB (integrated with Linux bootloader)"
+  echo "           - Windows installer appears in GRUB menu"
+  echo "           - Requires GRUB to be functional"
+  echo "           - Still depends on Linux boot chain"
+  echo ""
+  echo "  Option 2) Windows Bootloader (direct UEFI boot)"
+  echo "           - Boot directly to Windows installer from UEFI"
+  echo "           - Independent from GRUB/Linux boot"
+  echo "           - Works even if Linux boot is broken"
+  echo "           - Requires changing BIOS/UEFI boot order"
+  echo ""
+  
+  local answer
+  read -p "Select bootloader (1=GRUB, 2=Windows): " answer
+  
+  if [[ "$answer" == "2" ]]; then
+    echo "windows"
+    return 0
+  else
+    echo "grub"
+    return 0
+  fi
 }
+
 
 # Option 1: Resize current disk and create new partition
 option_resize_current() {
@@ -227,8 +245,13 @@ option_another_disk() {
   msg "Copying ISO to $partition..."
   sudo cp "$ISO_SRC" "$mount_dir/win11.iso"
   
-  msg "Creating GRUB entry to boot from $partition..."
-  cat | sudo tee /etc/grub.d/40_custom_win11 >/dev/null <<'GRUB'
+  # Ask user's bootloader preference
+  local bootloader
+  bootloader="$(ask_bootloader_preference "disk")"
+  
+  if [[ "$bootloader" == "grub" ]]; then
+    msg "Setting up GRUB entry to boot from $partition..."
+    cat | sudo tee /etc/grub.d/40_custom_win11 >/dev/null <<'GRUB'
 menuentry "Windows 11 installer (from disk)" {
     search --no-floppy --set=iso_root --label WIN11_INSTALL
     set isofile="/win11.iso"
@@ -236,15 +259,32 @@ menuentry "Windows 11 installer (from disk)" {
     chainloader (loop)/efi/boot/bootx64.efi
 }
 GRUB
-  sudo chmod +x /etc/grub.d/40_custom_win11
-  
-  msg "Regenerating grub.cfg..."
-  sudo grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || sudo grub2-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+    sudo chmod +x /etc/grub.d/40_custom_win11
+    
+    msg "Regenerating grub.cfg..."
+    sudo grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || sudo grub2-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+    
+    msg "✓ Setup complete!"
+    msg "Windows installer is on $partition (GRUB enabled)"
+    msg "It will appear in the GRUB menu at next boot"
+  else
+    msg "Setup for Windows bootloader..."
+    msg ""
+    msg "✓ Windows 11 installer ready on $partition"
+    msg ""
+    msg "To boot the Windows installer:"
+    msg "  1. Reboot your system"
+    msg "  2. Enter BIOS/UEFI settings (usually Del, F2, or F12 key)"
+    msg "  3. Change boot order to boot from: $partition (or 'UEFI: ...' entry)"
+    msg "  4. Save and reboot"
+    msg "  5. Windows installer will boot directly"
+    msg ""
+    warn "Note: You can still access GRUB by holding Shift during boot"
+  fi
   
   sudo umount "$mount_dir"
   rmdir "$mount_dir"
   
-  msg "Setup complete! Windows installer is on $partition"
   msg "You can now safely format all other disks during Windows installation."
   return 0
 }
@@ -316,12 +356,34 @@ option_usb() {
   msg "Syncing..."
   sync
   
-  msg "✓ Bootable USB created successfully!"
-  msg "You can now:"
-  msg "  1. Unplug the USB drive"
-  msg "  2. Reboot your system"
-  msg "  3. Select USB as boot device in BIOS/UEFI"
-  msg "  4. Windows installer will boot and you can safely format all disks"
+  # Ask user's bootloader preference for USB
+  local bootloader
+  bootloader="$(ask_bootloader_preference "usb")"
+  
+  msg ""
+  if [[ "$bootloader" == "grub" ]]; then
+    msg "✓ Bootable USB created successfully!"
+    msg "To boot with GRUB:"
+    msg "  1. Keep USB plugged in"
+    msg "  2. Reboot and let GRUB menu appear"
+    msg "  3. Select 'Windows 11 installer' from GRUB menu"
+    msg ""
+    msg "Note: You'll need to set up GRUB entry on your system disk"
+    msg "Run this on next boot to configure GRUB:"
+    msg "  sudo grub-mkconfig -o /boot/grub/grub.cfg"
+  else
+    msg "✓ Bootable USB created successfully!"
+    msg "To boot the Windows installer:"
+    msg "  1. Unplug the USB drive from this computer"
+    msg "  2. Plug it into the computer where you want to install Windows"
+    msg "  3. Reboot that computer"
+    msg "  4. Press the boot menu key (usually F12, Esc, or Del) at startup"
+    msg "  5. Select your USB drive from the boot menu"
+    msg "  6. Windows installer will boot directly from USB"
+  fi
+  
+  msg ""
+  msg "Windows installer will boot and you can safely format all disks"
   
   return 0
 }

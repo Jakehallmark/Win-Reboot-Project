@@ -32,17 +32,22 @@ This allows you to safely wipe **all drives** during Windows installation, rathe
 - Detects other internal disks on your system
 - Formats the selected disk completely (FAT32)
 - Copies the ISO to that disk
-- Creates a GRUB entry to boot from it
+- Asks if you want to boot via GRUB or Windows bootloader
+
+**Bootloader Choice:**
+- **GRUB**: Windows installer appears in GRUB menu (requires GRUB to work)
+- **Windows Bootloader**: Boot directly from UEFI without GRUB (more independent)
 
 **Pros:**
 - ✅ Can safely format **all other disks** during Windows installation
-- Works with existing GRUB setup
+- Flexible bootloader options (GRUB or direct UEFI)
 - No USB drive needed
-- Clean separation of installer and system
+- Can boot directly via Windows if GRUB fails
 
 **Cons:**
 - Requires having a spare internal disk
 - That disk will be formatted
+- Windows bootloader option requires changing BIOS/UEFI boot order
 
 **When to use:** You have 2+ internal drives (your setup!)
 
@@ -60,12 +65,18 @@ Result:   Put Windows installer on nvme0n1, wipe nvme1n1 freely
 - Detects USB drives with sufficient space (10GB+)
 - Writes ISO directly to USB device (making it bootable)
 - USB becomes a standalone Windows installer
+- Asks if you want to boot via GRUB or direct UEFI/BIOS
+
+**Bootloader Choice:**
+- **GRUB**: Configure GRUB entry to boot USB (requires GRUB menu to work)
+- **Direct UEFI/BIOS**: Boot directly from USB (more portable and independent)
 
 **Pros:**
 - ✅ Completely independent from internal disks
 - ✅ Can safely format **all internal disks** during Windows installation
 - Most flexible option
 - Can reuse USB for future Windows installations
+- Direct boot works on any computer (portable)
 
 **Cons:**
 - Requires a USB drive with 10GB+ capacity
@@ -92,6 +103,50 @@ If you select "Use simple GRUB loopback setup", the script falls back to the ori
 
 ---
 
+## Understanding Bootloader Options
+
+When using **Option B** (dedicated disk) or **Option C** (USB), you'll be asked to choose how to boot the Windows installer:
+
+### GRUB Bootloader
+```
+Your Linux system boots → GRUB menu appears → You select "Windows 11 installer"
+                          ↓
+                    Windows installer boots
+```
+**Pros:**
+- Integrated with your existing Linux boot menu
+- Easy to access multiple boot options
+- Familiar interface if you use GRUB daily
+
+**Cons:**
+- Depends on GRUB working correctly
+- If your Linux boot is broken, you can't reach Windows
+- GRUB must detect the external disk/USB
+
+### Windows Bootloader (Direct UEFI/BIOS)
+```
+Power on → BIOS/UEFI boot menu → You select Windows installer disk/USB
+                                   ↓
+                            Windows installer boots
+```
+**Pros:**
+- Completely independent from Linux/GRUB
+- Works even if Linux boot is completely broken
+- Fastest boot option
+- USB installer is portable (works on any computer)
+- More compatible with older systems
+
+**Cons:**
+- Requires manual BIOS/UEFI boot order change
+- No integrated boot menu (must use BIOS/UEFI instead)
+- Less convenient for dual-boot testing
+
+### Recommendation
+- **GRUB**: If you want easy access and don't mind using GRUB menu
+- **Windows Bootloader**: If you want independence or are using USB (portable)
+
+---
+
 ## Comparison Table
 
 | Feature | Option 1 | Option 2 | Option 3 | Default |
@@ -101,6 +156,7 @@ If you select "Use simple GRUB loopback setup", the script falls back to the ori
 | Works on all systems | ❌ | ⚠️ | ✅ | ✅ |
 | Setup complexity | Hard | Easy | Easy | Very Easy |
 | Risk level | High | Medium | Low | Low |
+| Bootloader choice | N/A | ✅ GRUB or UEFI | ✅ GRUB or UEFI | GRUB only |
 | Implementation status | ⏳ Planned | ✅ Working | ✅ Working | ✅ Working |
 
 ---
