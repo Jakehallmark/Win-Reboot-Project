@@ -212,8 +212,14 @@ option_another_disk() {
   local choice
   read -p "Select disk number (1-$count): " choice
   
+  # Handle empty input
+  if [[ -z "$choice" ]]; then
+    msg "No disk selected"
+    return 1
+  fi
+  
   if ! [[ "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt $count ]]; then
-    err "Invalid selection"
+    err "Invalid selection (must be between 1 and $count)"
   fi
   
   target_disk="${options[$((choice-1))]}"
@@ -251,7 +257,8 @@ option_another_disk() {
   
   if [[ "$bootloader" == "grub" ]]; then
     msg "Setting up GRUB entry to boot from $partition..."
-    cat | sudo tee /etc/grub.d/40_custom_win11 >/dev/null <<'GRUB'
+    sudo tee /etc/grub.d/40_custom_win11 >/dev/null <<'GRUB'
+#!/bin/sh
 menuentry "Windows 11 installer (from disk)" {
     search --no-floppy --set=iso_root --label WIN11_INSTALL
     set isofile="/win11.iso"
@@ -325,8 +332,14 @@ option_usb() {
   local choice
   read -p "Select USB device number (1-$count): " choice
   
+  # Handle empty input
+  if [[ -z "$choice" ]]; then
+    msg "No device selected"
+    return 1
+  fi
+  
   if ! [[ "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt $count ]]; then
-    err "Invalid selection"
+    err "Invalid selection (must be between 1 and $count)"
   fi
   
   local target_usb="${usb_devices[$((choice-1))]}"

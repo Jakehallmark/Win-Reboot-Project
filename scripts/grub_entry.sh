@@ -63,6 +63,7 @@ main() {
   cp "$ISO_SRC" "$ISO_DEST"
 
   cat >"$GRUB_CUSTOM" <<'GRUB'
+#!/bin/sh
 menuentry "Windows 11 installer (ISO loop)" {
     set isofile="/boot/win11.iso"
     search --no-floppy --set=iso_root --file $isofile
