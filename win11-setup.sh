@@ -674,7 +674,8 @@ format_and_copy_to_fat32_partition() {
   cleanup_mounts+=("$mnt")
 
   msg "Copying installer files (UEFI)..."
-  sudo cp -a "$src_tree"/. "$mnt"/ || err "Copy failed"
+  # FAT32 cannot preserve Unix ownership; drop ownership preservation to avoid noisy failures.
+  sudo cp -a --no-preserve=ownership "$src_tree"/. "$mnt"/ || err "Copy failed"
   sync
 }
 
