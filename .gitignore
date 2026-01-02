@@ -1,9 +1,8 @@
 # Build outputs
 out/
 tmp/
-*.iso
 
-# System files
+# OS files
 .DS_Store
 Thumbs.db
 
@@ -16,7 +15,3 @@ Thumbs.db
 
 # Logs
 *.log
-
-# Backup files
-*.bak
-*.backup

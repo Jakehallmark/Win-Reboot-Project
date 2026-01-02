@@ -1,13 +1,8 @@
-Win-Reboot-Project
-==================
+# Win-Reboot-Project
 
-**Version 1.0.0**
+Download, customize, and boot Windows 11 from Linux with a single command.
 
-A collection of tools to download a fresh Windows 11 ISO from Microsoft (via UUP dump), optionally trim it down Tiny11-style on Linux, and add a GRUB menu entry so you can boot straight into the installer without needing a USB drive. Note that Secure Boot needs to be disabled for the GRUB loopback method to work.
-
-## Quick Start (Standalone)
-
-**New!** Use the all-in-one script for the simplest experience:
+## Quick Start
 
 ```bash
 git clone https://github.com/Jakehallmark/Win-Reboot-Project.git
@@ -15,219 +10,150 @@ cd Win-Reboot-Project
 ./win11-setup.sh
 ```
 
-See [README-STANDALONE.md](README-STANDALONE.md) for details.
+That's it! The script will guide you through everything.
 
-## Advanced Usage (Modular Scripts)
+## What It Does
 
-The project also includes modular scripts in the `scripts/` directory for advanced users. See below for details.
+1. **Downloads Windows 11** - Fetches official ISO from UUP dump (uupdump.net)
+2. **Tiny11 Trimming** (optional) - Removes bloat to reduce ISO size
+3. **Sets Up Installer** - Choose GRUB loopback, USB drive, or dedicated disk
+4. **Configures Boot** - Automatic GRUB entry or UEFI boot instructions
+5. **Reboots to Installer** - Start Windows installation immediately
 
-Status
-------
-- All scripts are ready to use. No binaries are included - everything downloads directly from Microsoft's CDN through the UUP dump helper.
-- Comprehensive error handling with automatic cleanup and detailed troubleshooting guidance.
-- Try this in a VM first. This setup modifies your bootloader and sets up an on-disk installer that can completely wipe your machine.
+## Requirements
 
-Prerequisites
--------------
-- Linux with GRUB and UEFI (Secure Boot must be disabled for loopback chainloading)
-- About 15 GB free space for `~/Win-Reboot-Project/out` and installer media
-- GUI file picker (zenity or kdialog) for interactive file selection, or fallback to text input
-- Required packages (scripts will check for these, but you'll need to install them):
-  - Debian/Ubuntu: `aria2 cabextract wimtools xorriso p7zip-full grub-common python3 python3-hivex unzip curl chntpw parted dosfstools`
-  - Fedora/RHEL: `aria2 cabextract wimlib-utils xorriso p7zip p7zip-plugins grub2-tools python3 hivex unzip curl chntpw parted dosfstools`
-  - Arch: `aria2 cabextract wimlib xorriso p7zip grub python3 hivex unzip curl chntpw parted`
-- Internet access to reach Microsoft's CDN, UUP dump, and GitHub
+- **Linux system** (Ubuntu, Debian, Fedora, Arch, Mint supported)
+- **Secure Boot disabled** (required for GRUB loopback)
+- **20+ GB free disk space**
+- **Internet connection** (downloads from Microsoft CDN)
 
-How it works
-------------
-1. **Step 1-2: ISO Download & Trimming** (`scripts/interactive_setup.sh` + `scripts/tiny11.sh`)
-   - Download Windows 11 ISO from UUP dump via file picker
-   - Optionally apply Tiny11-style trimming (minimal, lite, aggressive, or vanilla presets)
+The script auto-installs missing dependencies:
+- `aria2c` - Fast parallel downloads
+- `wimlib-imagex` - Windows image manipulation
+- `xorriso` - ISO creation/extraction
+- `parted` / `mkfs.fat` - Disk management (for USB/disk options)
 
-2. **Step 3: Installer Media Setup** (`scripts/setup_installer_media.sh`) - Choose one:
-   - **Option A** (Recommended): Simple GRUB loopback - Copy ISO to `/boot/win11.iso`
-   - **Option B**: Dedicated disk - Use another internal drive for the installer (can wipe all disks safely)
-   - **Option C**: Bootable USB - Create independent bootable USB installer
+## Three Installation Methods
 
-3. **Step 4: GRUB Configuration** (`scripts/grub_entry.sh`)
-   - Adds appropriate GRUB menu entry based on media setup choice
-   - Regenerates grub.cfg for immediate availability
+### Option A: GRUB Loopback (Recommended)
+- ✅ Fastest and simplest setup
+- ✅ No USB drive needed
+- ⚠️ Cannot format the disk containing `/boot` during Windows installation
 
-4. **Step 5: Reboot** (`scripts/reboot_to_installer.sh`)
-   - Reboots into Windows 11 installer
-   - You control disk partitioning and formatting
+### Option B: Dedicated Disk
+- ✅ Uses another internal drive
+- ✅ Can safely wipe all other disks during Windows installation
+- ✅ Choose GRUB or Windows bootloader
 
-Tiny11 Attribution
-------------------
-This project is inspired by and based on the excellent work of the [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by ntdevlabs.
+### Option C: Bootable USB
+- ✅ Most flexible option
+- ✅ Completely independent from Linux
+- ✅ Can safely wipe ALL internal disks during installation
 
-Kudos to ntdevlabs for their pioneering work in creating lightweight, bloat-free Windows 11 installations. Their Tiny11Builder provided the foundation and methodology that made this Linux-based implementation possible.
+## Tiny11 Trimming Presets
 
-### My Implementation
-- Adapts the Tiny11Builder PowerShell workflow to pure bash for Linux systems
-- Uses `wimlib-imagex` for WIM manipulation instead of DISM
-- Presets in `data/removal-presets/*.txt` are inspired by Tiny11's conservative approach
-- Maintains OOBE/activation compatibility through careful component selection
-- Implements registry tweaks for TPM/Secure Boot bypass similar to Tiny11's methods
+Reduce Windows bloat before installation:
 
-### Key Differences
-- **Platform**: Linux native (bash) vs Windows (PowerShell)
-- **Distribution**: GRUB chainload, dedicated disk, or USB boot
-- **Automation**: Full CLI automation with interactive mode
-- **Flexibility**: Three installer media setup options for different hardware configurations
+- **minimal** - Remove consumer apps (keep Microsoft Store, Defender, BitLocker)
+- **lite** - minimal + remove Windows Help, Media Player, Quick Assist
+- **aggressive** - minimal + Photos, Maps, Camera, Calculator, Paint, etc.
+- **vanilla** - No modifications (full Windows 11)
 
-**Please visit and support the original Tiny11 project**: https://github.com/ntdevlabs/tiny11builder
-
-Installer Media Setup
----------------------
-
-The interactive setup now offers **three flexible options** for the Windows installer:
-
-1. **GRUB Loopback** (Default/Recommended)
-   - Simplest: Copy ISO to `/boot/win11.iso`
-   - Works with existing GRUB setup
-   - Good if you only have one internal disk
-
-2. **Dedicated Disk** (Best for multi-disk systems)
-   - Format another internal disk for the installer
-   - **Can safely wipe all other disks** during Windows installation
-   - Good for systems with spare internal drives
-
-3. **Bootable USB** (Most flexible)
-   - Create independent bootable USB installer
-   - **Can safely wipe all internal disks** during Windows installation
-   - Works on any hardware with a spare USB drive
-
-**See [INSTALLER_MEDIA.md](INSTALLER_MEDIA.md) for detailed information on each option.**
-
-Safety notes
-------------
-- Don't run this on a production machine unless you have a solid backup and restore plan.
-- Double-check `/etc/default/grub` and your target disk. GRUB changes affect the entire system.
-- Secure Boot must be disabled for the GRUB chainloader to work.
-- If using Option 2/3 media setup, ensure you understand which disks will be available to the Windows installer.
-
-Quick Install
--------------
-
-Run this one-liner to download and launch the interactive setup (no git clone needed):
+## Example Session
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/install.sh | bash
+$ ./win11-setup.sh
+
+╔═══════════════════════════════════════════════════════════════╗
+║           Win-Reboot-Project: Windows 11 Setup                ║
+║        Inspired by the Tiny11 Project by ntdevlabs            ║
+╚═══════════════════════════════════════════════════════════════╝
+
+Continue? [y/N]: y
+
+[+] Checking dependencies...
+[+] Step 1: Fetch Windows 11 ISO
+    Visit: https://uupdump.net
+    [File picker opens...]
+    
+[+] Step 2: Tiny11 trimming (optional)
+    Apply Tiny11 trimming? [Y/n]: y
+    Preset [minimal/lite/aggressive/vanilla]: minimal
+    
+[+] Step 3: Installer Media Setup
+    Use GRUB loopback? [Y/n]: y
+    
+[+] Step 4: GRUB Configuration
+    [Creates GRUB entry...]
+    
+[+] Step 5: Reboot
+    Reboot now? [y/N]: y
 ```
 
-Or if you prefer wget:
+## Troubleshooting
 
-```bash
-wget -qO- https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/install.sh | bash
+**Missing dependencies**
+- The script will prompt to auto-install them
+- Or install manually for your distro
+
+**"Secure Boot must be disabled"** (GRUB loopback only)
+- Restart and enter BIOS/UEFI (usually Del, F2, or F12 at boot)
+- Find "Secure Boot" setting and disable it
+- USB/Dedicated disk options work with Secure Boot enabled
+
+**GRUB entry not appearing**
+- Verify ISO copied: `ls -lh /boot/win11.iso`
+- Regenerate GRUB: `sudo grub-mkconfig -o /boot/grub/grub.cfg`
+
+**Want to format Linux disk during Windows install?**
+- Use Option B (dedicated disk) or C (USB) instead of GRUB loopback
+- Choose "Windows Bootloader" when prompted
+- This makes the installer completely independent from Linux
+
+**ISO extraction or WIM mounting fails**
+- Ensure 20+ GB free space in `/tmp` or set `TMP_DIR=/path/to/space`
+- Check that wimlib-imagex is properly installed
+
+## Project Structure
+
+```
+Win-Reboot-Project/
+├── win11-setup.sh          # Main script (run this!)
+├── README.md               # This file
+├── LICENSE                 # License information
+├── data/
+│   └── removal-presets/    # Tiny11 package removal lists
+├── out/                    # Generated ISOs (created automatically)
+└── tmp/                    # Temporary files (created automatically)
 ```
 
-This will clone the repo to `~/Win-Reboot-Project` and launch the interactive setup.
+## Credits
 
-Usage
------
+Inspired by the excellent [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by ntdevlabs.
 
-**Interactive Mode (Recommended):**
-```bash
-# This is the easiest way - it guides you through everything
-./scripts/interactive_setup.sh
-```
+Windows 11 downloads provided by [UUP dump](https://uupdump.net) (community service).
 
-The interactive setup will:
-1. Check and install dependencies
-2. Direct you to https://uupdump.net
-3. Ask you to download a Windows 11 build ZIP
-4. Show a file picker to select your downloaded ZIP
-5. Build the ISO from the ZIP
-6. Optionally apply Tiny11 trimming
-7. Configure GRUB (with sudo)
-8. Offer to reboot into the installer
+## License
 
-**Manual Step-by-Step (if you prefer):**
-```bash
-# 0) Check/install dependencies
-./scripts/check_deps.sh --auto-install
+See [LICENSE](LICENSE) file for details.
 
-# 1) Download ISO
-#    Visit https://uupdump.net, select build/language/edition, download the ZIP
-#    Then run interactive_setup.sh and select the ZIP file
+## Contributing
 
-# 2) Optional: Apply Tiny11-style trimming
-./scripts/tiny11.sh out/win11.iso --preset minimal
+This is a simplified, single-script project. For improvements:
+1. Test your changes thoroughly
+2. Submit pull requests with clear descriptions
+3. Keep it simple - the goal is one self-contained script
 
-# 3) Add GRUB entry (requires sudo)
-sudo ./scripts/grub_entry.sh out/win11.iso
+## Safety Notes
 
-# 4) Reboot into installer
-sudo ./scripts/reboot_to_installer.sh
-```
+⚠️ **Important Warnings:**
+- This tool modifies your boot configuration
+- The Windows installer can completely wipe your disks
+- **Test in a virtual machine first** if you're unsure
+- Always backup important data before proceeding
+- Dual-booting requires careful partition management
 
-**Using Make:**
-```bash
-make check          # Check dependencies
-make install        # Run interactive setup
-make trim           # Apply Tiny11 trimming
-sudo make grub      # Add GRUB entry
-sudo make reboot    # Reboot to installer
-```
-
-Testing & Verification
-----------------------
-- The `grub_entry.sh` script uses `grub-script-check` (when available) before modifying grub.cfg
-- You might want to mount `out/win11.iso` and check `boot.wim` with `7z` or `wimlib` to verify everything looks right before making GRUB changes
-- If you need to re-download or use a different build, simply run `./scripts/interactive_setup.sh` again
-
-Available scripts
------------------
-- **fetch_iso.sh** - Download Windows 11 ISO from Microsoft via UUP dump
-- **tiny11.sh** - Apply Tiny11-style trimming to reduce ISO size
-- **grub_entry.sh** - Add GRUB bootloader entry for the installer
-- **reboot_to_installer.sh** - Reboot directly to the Windows installer
-- **check_deps.sh** - Verify all required dependencies are installed
-- **interactive_setup.sh** - Guided setup wizard (recommended for new users)
-- **cleanup.sh** - Remove temporary files and optionally GRUB entries
-
-Cleanup
--------
-```bash
-# Clean temporary files only
-./scripts/cleanup.sh
-
-# Remove ISOs from out/ directory
-./scripts/cleanup.sh --iso
-
-# Remove GRUB entry (requires root)
-sudo ./scripts/cleanup.sh --grub
-
-# Remove everything
-sudo ./scripts/cleanup.sh --all
-```
-
-Documentation
--------------
-- [INSTALL.md](INSTALL.md) - Comprehensive installation guide
-- [QUICKREF.md](QUICKREF.md) - Quick reference card
-- [CREDITS.md](CREDITS.md) - Credits and acknowledgments
-- [data/removal-presets/](data/removal-presets/) - Tiny11 removal preset files
-
-Credits & Acknowledgments
--------------------------
-**Tiny11 Project** - https://github.com/ntdevlabs/tiny11builder
-- Created by ntdevlabs
-- Original concept and methodology for Windows 11 debloating
-- Inspiration for this Linux implementation
-
-**UUP Dump** - https://uupdump.net
-- Community-driven Windows update retrieval service
-- Enables direct downloads from Microsoft CDN
-
-**wimlib** - https://wimlib.net
-- Cross-platform WIM manipulation library
-- Essential for Linux-based Windows image editing
-
-Next steps (development)
-------------------------
-- Add distro-specific Secure Boot guidance and wimboot fallback
-- Test on more Linux distributions
-- Add support for Windows 10 ISOs
-- Implement alternative boot methods (wimboot/iPXE)
+🔒 **Security:**
+- All Windows files download directly from Microsoft CDN
+- UUP dump scripts are open source and auditable
+- Review the script before running with elevated privileges
