@@ -198,7 +198,7 @@ step_tiny11() {
     return 0
   fi
   
-  require_cmd wimlib-imagex xorriso
+  require_cmd wimlib-imagex
   
   msg "Applying $preset preset..."
   
@@ -210,7 +210,23 @@ step_tiny11() {
   mkdir -p "$mount_dir" "$iso_mount"
   
   msg "Extracting ISO..."
-  xorriso -osirrox on -indev "$ISO_PATH" -extract / "$iso_mount" 2>/dev/null || err "Failed to extract ISO"
+  
+  # Try multiple extraction methods
+  if command -v 7z >/dev/null 2>&1; then
+    msg "Using 7z for extraction..."
+    7z x -y -o"$iso_mount" "$ISO_PATH" >/dev/null 2>&1 || err "Failed to extract ISO with 7z"
+  elif command -v iso-read >/dev/null 2>&1; then
+    msg "Using iso-read for extraction..."
+    iso-read -l "$ISO_PATH" | while read -r file; do
+      [[ -z "$file" ]] && continue
+      mkdir -p "$iso_mount/$(dirname "$file")"
+      iso-read -f "$file" -o "$iso_mount/$file" -i "$ISO_PATH" 2>/dev/null || true
+    done
+  else
+    # Last resort: try mounting as loop
+    msg "Using loop mount for extraction..."
+    sudo mount -o loop "$ISO_PATH" "$iso_mount" || err "Failed to mount ISO"
+  fi
   
   # Find install.wim or install.esd (case-insensitive)
   local wim_file=""
@@ -292,6 +308,12 @@ step_tiny11() {
     -no-emul-boot \
     -o "$tiny_iso" \
     "$iso_mount" 2>/dev/null || err "Failed to create ISO"
+  
+  # Cleanup: unmount if it was mounted
+  if mountpoint -q "$iso_mount" 2>/dev/null; then
+    msg "Unmounting ISO..."
+    sudo umount "$iso_mount" || true
+  fi
   
   mv "$tiny_iso" "$ISO_PATH"
   msg "✓ Tiny11 ISO ready: $ISO_PATH"
