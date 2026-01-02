@@ -15,16 +15,21 @@ Prerequisites
 -------------
 - Linux with GRUB and UEFI (Secure Boot must be disabled for loopback chainloading)
 - About 15 GB free space for `~/Win-Reboot-Project/out` and `/boot/win11.iso`
+- GUI file picker (zenity or kdialog) for interactive file selection, or fallback to text input
 - Required packages (scripts will check for these, but you'll need to install them):
-  - Debian/Ubuntu: `aria2 cabextract wimtools genisoimage p7zip-full grub-common`
-  - Fedora/RHEL: `aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools`
-  - Arch: `aria2 cabextract wimlib cdrtools p7zip grub`
-- Internet access to reach Microsoft's CDN and GitHub
+  - Debian/Ubuntu: `aria2 cabextract wimtools genisoimage p7zip-full grub-common python3 python3-hivex unzip curl chntpw`
+  - Fedora/RHEL: `aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools python3 hivex unzip curl chntpw`
+  - Arch: `aria2 cabextract wimlib cdrtools p7zip grub python3 hivex unzip curl chntpw`
+- Internet access to reach Microsoft's CDN, UUP dump, and GitHub
 
 How it works
 ------------
-1. `scripts/fetch_iso.sh` finds the latest public Windows 11 build, downloads and builds the ISO via UUP dump, then saves it to `out/win11.iso`
-2. `scripts/tiny11.sh` (optional) trims down `install.wim/install.esd` using wimlib with your choice of presets (minimal, lite, or vanilla)
+1. **Interactive Setup** (`scripts/interactive_setup.sh`) guides you through:
+   - Directing you to https://uupdump.net to select your preferred Windows 11 build, language, and edition
+   - Opening a file picker dialog to select your downloaded UUP dump ZIP file
+   - Extracting and running the UUP dump conversion script to build the ISO
+   - Saving the result to `out/win11.iso`
+2. `scripts/tiny11.sh` (optional) trims down `install.wim/install.esd` using wimlib with your choice of presets (minimal, lite, aggressive, or vanilla)
 3. `scripts/grub_entry.sh` copies the ISO to `/boot/win11.iso`, adds a GRUB menu entry to chainload the installer, and regenerates grub.cfg
 4. `scripts/reboot_to_installer.sh` does some sanity checks and reboots into the new GRUB entry
 
@@ -71,43 +76,58 @@ wget -qO- https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main
 
 This will clone the repo to `~/Win-Reboot-Project` and launch the interactive setup.
 
-Manual Setup
-------------
-If you've already cloned the repo:
+Usage
+-----
 
+**Interactive Mode (Recommended):**
 ```bash
-# Interactive mode (recommended for first-time users)
+# This is the easiest way - it guides you through everything
 ./scripts/interactive_setup.sh
-
-# OR Manual step-by-step:
-
-# 0) Check dependencies
-./scripts/check_deps.sh
-
-# Or auto-install missing packages (interactive permission prompt)
-./scripts/check_deps.sh --auto-install
-
-# 1) Download latest public Win11 ISO (Retail, x64, en-US by default)
-./scripts/fetch_iso.sh
-
-# 2) Optional: apply Tiny11-style trimming with prompts
-./scripts/tiny11.sh out/win11.iso --preset minimal
-
-# 3) Add GRUB entry (copies ISO to /boot/win11.iso) and regenerate grub.cfg
-sudo ./scripts/grub_entry.sh out/win11.iso
-
-# 4) Reboot into installer (after reviewing grub.cfg)
-sudo ./scripts/reboot_to_installer.sh
-
-# OR using Make:
-make check && make fetch && make trim && sudo make grub
 ```
 
-Testing & dry runs
-------------------
-- Run `scripts/fetch_iso.sh --dry-run` to see what build ID and download plan would be used
+The interactive setup will:
+1. Check and install dependencies
+2. Direct you to https://uupdump.net
+3. Ask you to download a Windows 11 build ZIP
+4. Show a file picker to select your downloaded ZIP
+5. Build the ISO from the ZIP
+6. Optionally apply Tiny11 trimming
+7. Configure GRUB (with sudo)
+8. Offer to reboot into the installer
+
+**Manual Step-by-Step (if you prefer):**
+```bash
+# 0) Check/install dependencies
+./scripts/check_deps.sh --auto-install
+
+# 1) Download ISO
+#    Visit https://uupdump.net, select build/language/edition, download the ZIP
+#    Then run interactive_setup.sh and select the ZIP file
+
+# 2) Optional: Apply Tiny11-style trimming
+./scripts/tiny11.sh out/win11.iso --preset minimal
+
+# 3) Add GRUB entry (requires sudo)
+sudo ./scripts/grub_entry.sh out/win11.iso
+
+# 4) Reboot into installer
+sudo ./scripts/reboot_to_installer.sh
+```
+
+**Using Make:**
+```bash
+make check          # Check dependencies
+make install        # Run interactive setup
+make trim           # Apply Tiny11 trimming
+sudo make grub      # Add GRUB entry
+sudo make reboot    # Reboot to installer
+```
+
+Testing & Verification
+----------------------
 - The `grub_entry.sh` script uses `grub-script-check` (when available) before modifying grub.cfg
-- You might want to mount `out/win11.iso` and check `boot.wim` with 7z or wimlib to verify everything looks right before making GRUB changes
+- You might want to mount `out/win11.iso` and check `boot.wim` with `7z` or `wimlib` to verify everything looks right before making GRUB changes
+- If you need to re-download or use a different build, simply run `./scripts/interactive_setup.sh` again
 
 Available scripts
 -----------------
