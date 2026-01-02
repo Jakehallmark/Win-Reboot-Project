@@ -88,90 +88,53 @@ check_dependencies() {
   echo ""
 }
 
-extract_url_params() {
-  local url="$1"
-  local build_id_var="$2"
-  local language_var="$3"
-  local edition_var="$4"
-  
-  # Extract build ID (required)
-  if [[ "$url" =~ id=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}) ]]; then
-    eval "$build_id_var='${BASH_REMATCH[1]}'"
-  else
-    return 1
-  fi
-  
-  # Extract language pack (optional but expected)
-  if [[ "$url" =~ pack=([a-zA-Z]{2}-[a-zA-Z]{2}) ]]; then
-    eval "$language_var='${BASH_REMATCH[1]}'"
-  fi
-  
-  # Extract edition (optional but expected)
-  # Handle URL encoding (e.g., %3B = semicolon) and preserve all editions for multi-edition ISOs
-  if [[ "$url" =~ edition=([a-zA-Z0-9_%]+) ]]; then
-    local raw_edition="${BASH_REMATCH[1]}"
-    # URL decode common characters
-    raw_edition="${raw_edition//%3B/;}"
-    raw_edition="${raw_edition//%3b/;}"
-    # Keep all editions (e.g., "core;professional" stays as "core;professional")
-    eval "$edition_var='$raw_edition'"
-  fi
-  
-  return 0
-}
-
-verify_build_exists() {
-  local build_id="$1"
-  
-  msg "Verifying build availability..."
-  
-  # Query the UUP dump API to check if build exists
-  local api="https://api.uupdump.net/listlangs.php?id=${build_id}"
-  local json
-  
-  if ! json="$(curl -fsSL "$api" 2>&1)"; then
-    warn "Could not connect to UUP dump API"
-    return 1
-  fi
-  
-  # Check if response indicates success
-  if echo "$json" | python3 -c "import json,sys; data=json.load(sys.stdin); sys.exit(0 if data.get('response',{}).get('apiVersion') else 1)" 2>/dev/null; then
-    msg "Build verified: ID $build_id is available"
-    return 0
-  else
-    warn "Build ID appears to be invalid or expired"
-    return 1
-  fi
-}
-
 step_fetch_iso() {
   msg "Step 1: Fetch Windows 11 ISO"
   echo ""
   
   cat <<'EOF'
-To get started, you need to find a Windows 11 build on UUP dump:
+To get started, download a Windows 11 build from UUP dump:
 
-  1. Visit https://uupdump.net
-  2. Click "Latest Dev Channel build" or search for a specific version
-  3. Select your language (e.g., English (United States))
-  4. Select your edition (e.g., Windows 11 Professional)
-  5. On the download options page, either:
-     a) Copy the URL from your browser's address bar, OR
-     b) Click the download button, save the ZIP file, and provide its path
+  1. Visit: https://uupdump.net
+  2. Select a build (e.g., "Latest Dev Channel build")
+  3. Choose your language (e.g., English (United States))
+  4. Choose your edition(s) (e.g., Windows 11 Professional)
+  5. Click the "Download" button and save the ZIP file
 
+Press Enter when you're ready to select the downloaded ZIP file...
 EOF
   
-  read -r -p "Paste URL or path to ZIP file: " user_url < /dev/tty
-  check_cancel "$user_url"
+  read -r -p "" < /dev/tty
+  echo ""
   
-  if [[ -z "$user_url" ]]; then
-    fatal_error "Input cannot be empty" 1 \
-      "Please provide a valid UUP dump URL or path to ZIP file"
+  local zip_file=""
+  
+  # Try GUI file picker first
+  if command -v zenity &>/dev/null; then
+    msg "Opening file picker..."
+    zip_file=$(zenity --file-selection --title="Select UUP dump ZIP file" --file-filter="ZIP files (*.zip) | *.zip" --file-filter="All files | *" 2>/dev/null || true)
+  elif command -v kdialog &>/dev/null; then
+    msg "Opening file picker..."
+    zip_file=$(kdialog --getopenfilename ~ "*.zip|ZIP files (*.zip)" 2>/dev/null || true)
+  else
+    # Fallback to text input if no GUI available
+    warn "No GUI file picker available (zenity or kdialog not found)"
+    echo "Please enter the full path to the downloaded ZIP file:"
+    echo "Example: /home/user/Downloads/28020.1362_amd64_en-us_multi_5510915e_convert.zip"
+    echo ""
+    read -r -p "Path to ZIP: " zip_file < /dev/tty
+  fi
+  
+  check_cancel "$zip_file"
+  
+  if [[ -z "$zip_file" ]]; then
+    fatal_error "No file selected" 1 \
+      "Please run the script again and select the UUP dump ZIP file"
   fi
   
   # Check if it's a file path to an existing ZIP
-  if [[ -f "$user_url" ]]; then
-    msg "Using manually downloaded ZIP file: $user_url"
+  if [[ -f "$zip_file" ]]; then
+    msg "Using ZIP file: $zip_file"
     
     # Extract the ZIP to tmp and run the conversion
     local pkg_dir="$TMP_DIR/uupdump-manual"
@@ -179,7 +142,7 @@ EOF
     mkdir -p "$pkg_dir"
     
     msg "Extracting UUP dump package..."
-    if ! unzip -q "$user_url" -d "$pkg_dir" 2>&1; then
+    if ! unzip -q "$zip_file" -d "$pkg_dir" 2>&1; then
       fatal_error "Failed to extract ZIP file" 40 \
         "The ZIP file may be corrupted or invalid"
     fi
@@ -215,77 +178,10 @@ EOF
     
     msg "ISO created successfully: $ROOT_DIR/out/win11.iso"
     echo ""
-    return 0
-  fi
-  
-  # Not a file, treat as URL
-  # Extract parameters from URL
-  local build_id="" language="" edition=""
-  if ! extract_url_params "$user_url" "build_id" "language" "edition"; then
-    fatal_error "Invalid URL format" 1 \
-      "Could not extract build ID from URL. Expected format: https://uupdump.net/...?id=BUILD_ID&pack=LANGUAGE&edition=EDITION"
-  fi
-  
-  echo ""
-  msg "Extracted parameters from URL:"
-  echo "  Build ID: $build_id"
-  [[ -n "$language" ]] && echo "  Language: $language" || echo "  Language: (not specified)"
-  if [[ -n "$edition" ]]; then
-    if [[ "$edition" == *";"* ]]; then
-      echo "  Editions: $edition (multi-edition ISO)"
-    else
-      echo "  Edition: $edition"
-    fi
   else
-    echo "  Edition: (not specified)"
+    fatal_error "File not found" 1 \
+      "The selected file does not exist: $zip_file"
   fi
-  echo ""
-  
-  # Verify the build exists
-  if ! verify_build_exists "$build_id"; then
-    echo ""
-    warn "The build ID could not be verified. This could mean:"
-    echo "  - The build is expired or no longer available"
-    echo "  - There's a network connectivity issue"
-    echo "  - The UUP dump API is experiencing problems"
-    echo ""
-    if ! prompt_yn "Continue anyway?"; then
-      fatal_error "Build verification failed" 1 \
-        "Please try a different build from uupdump.net"
-    fi
-  fi
-  
-  echo ""
-  msg "Downloading Windows 11 ISO files..."
-  
-  # Build arguments for fetch_iso.sh
-  local -a fetch_args=()
-  fetch_args+=(--update-id "$build_id")
-  
-  # Add language if specified
-  if [[ -n "$language" ]]; then
-    fetch_args+=(--lang "$language")
-  fi
-  
-  # Add edition if specified (normalize to lowercase)
-  if [[ -n "$edition" ]]; then
-    fetch_args+=(--edition "${edition,,}")
-  fi
-  
-  # Execute the fetch
-  if ! "$SCRIPT_DIR/fetch_iso.sh" "${fetch_args[@]}"; then
-    fatal_error "ISO download failed" 20 \
-      "Check the error messages above. The build may be expired or unavailable."
-  fi
-  
-  # Verify output exists
-  if [[ ! -f "$ROOT_DIR/out/win11.iso" ]]; then
-    fatal_error "ISO file not found after download" 25 \
-      "Expected output at: $ROOT_DIR/out/win11.iso"
-  fi
-  
-  msg "ISO downloaded successfully: $ROOT_DIR/out/win11.iso"
-  echo ""
 }
 
 step_tiny11() {
