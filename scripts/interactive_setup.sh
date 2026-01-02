@@ -505,24 +505,49 @@ step_fetch_iso() {
     esac
 
     echo ""
+    echo "Build ID Options:"
+    echo "  1) Use latest available (auto-detect from API)"
+    echo "  2) Enter a specific build ID (from uupdump.net)"
+    echo ""
+    local build_choice
+    read -r -p "Choice [1-2, default 1]: " build_choice < /dev/tty
+    build_choice="${build_choice:-1}"
+    check_cancel "$build_choice"
 
     local captured_update_id=""
-    if ! query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
-      err "Could not query available builds from UUP dump API"
+    if [[ "$build_choice" == "2" ]]; then
       echo ""
-      echo "This could be due to:"
-      echo "  - Network connectivity issues"
-      echo "  - API rate limiting (wait a few minutes)"
-      echo "  - The selected channel/arch combination is not available"
+      echo "To find a working build ID:"
+      echo "  1. Visit https://uupdump.net"
+      echo "  2. Select your options (channel, edition, language)"
+      echo "  3. Copy the build ID from the URL or search results"
       echo ""
-      if ! prompt_yn "Retry the query?"; then
-        err "Cannot proceed without build information"
+      read -r -p "Enter build ID (UUID format): " captured_update_id < /dev/tty
+      check_cancel "$captured_update_id"
+      
+      if [[ -z "$captured_update_id" ]]; then
+        warn "Build ID cannot be empty"
         return 1
       fi
-      echo ""
+    else
+      # Auto-detect from API
       if ! query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
-        err "Query failed again. Please try again later or check your network connection."
-        return 1
+        err "Could not query available builds from UUP dump API"
+        echo ""
+        echo "This could be due to:"
+        echo "  - Network connectivity issues"
+        echo "  - API rate limiting (wait a few minutes)"
+        echo "  - The selected channel/arch combination is not available"
+        echo ""
+        if ! prompt_yn "Retry the query?"; then
+          err "Cannot proceed without build information"
+          return 1
+        fi
+        echo ""
+        if ! query_available_builds "$selected_channel" "$selected_arch" "captured_update_id"; then
+          err "Query failed again. Please try again later or check your network connection."
+          return 1
+        fi
       fi
     fi
 
