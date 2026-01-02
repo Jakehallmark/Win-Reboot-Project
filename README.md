@@ -14,24 +14,32 @@ Status
 Prerequisites
 -------------
 - Linux with GRUB and UEFI (Secure Boot must be disabled for loopback chainloading)
-- About 15 GB free space for `~/Win-Reboot-Project/out` and `/boot/win11.iso`
+- About 15 GB free space for `~/Win-Reboot-Project/out` and installer media
 - GUI file picker (zenity or kdialog) for interactive file selection, or fallback to text input
 - Required packages (scripts will check for these, but you'll need to install them):
-  - Debian/Ubuntu: `aria2 cabextract wimtools genisoimage p7zip-full grub-common python3 python3-hivex unzip curl chntpw`
-  - Fedora/RHEL: `aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools python3 hivex unzip curl chntpw`
-  - Arch: `aria2 cabextract wimlib cdrtools p7zip grub python3 hivex unzip curl chntpw`
+  - Debian/Ubuntu: `aria2 cabextract wimtools xorriso p7zip-full grub-common python3 python3-hivex unzip curl chntpw parted dosfstools`
+  - Fedora/RHEL: `aria2 cabextract wimlib-utils xorriso p7zip p7zip-plugins grub2-tools python3 hivex unzip curl chntpw parted dosfstools`
+  - Arch: `aria2 cabextract wimlib xorriso p7zip grub python3 hivex unzip curl chntpw parted`
 - Internet access to reach Microsoft's CDN, UUP dump, and GitHub
 
 How it works
 ------------
-1. **Interactive Setup** (`scripts/interactive_setup.sh`) guides you through:
-   - Directing you to https://uupdump.net to select your preferred Windows 11 build, language, and edition
-   - Opening a file picker dialog to select your downloaded UUP dump ZIP file
-   - Extracting and running the UUP dump conversion script to build the ISO
-   - Saving the result to `out/win11.iso`
-2. `scripts/tiny11.sh` (optional) trims down `install.wim/install.esd` using wimlib with your choice of presets (minimal, lite, aggressive, or vanilla)
-3. `scripts/grub_entry.sh` copies the ISO to `/boot/win11.iso`, adds a GRUB menu entry to chainload the installer, and regenerates grub.cfg
-4. `scripts/reboot_to_installer.sh` does some sanity checks and reboots into the new GRUB entry
+1. **Step 1-2: ISO Download & Trimming** (`scripts/interactive_setup.sh` + `scripts/tiny11.sh`)
+   - Download Windows 11 ISO from UUP dump via file picker
+   - Optionally apply Tiny11-style trimming (minimal, lite, aggressive, or vanilla presets)
+
+2. **Step 3: Installer Media Setup** (`scripts/setup_installer_media.sh`) - Choose one:
+   - **Option A** (Recommended): Simple GRUB loopback - Copy ISO to `/boot/win11.iso`
+   - **Option B**: Dedicated disk - Use another internal drive for the installer (can wipe all disks safely)
+   - **Option C**: Bootable USB - Create independent bootable USB installer
+
+3. **Step 4: GRUB Configuration** (`scripts/grub_entry.sh`)
+   - Adds appropriate GRUB menu entry based on media setup choice
+   - Regenerates grub.cfg for immediate availability
+
+4. **Step 5: Reboot** (`scripts/reboot_to_installer.sh`)
+   - Reboots into Windows 11 installer
+   - You control disk partitioning and formatting
 
 Tiny11 Attribution
 ------------------
@@ -48,16 +56,40 @@ Kudos to ntdevlabs for their pioneering work in creating lightweight, bloat-free
 
 ### Key Differences
 - **Platform**: Linux native (bash) vs Windows (PowerShell)
-- **Distribution**: GRUB chainload vs USB/ISO boot
+- **Distribution**: GRUB chainload, dedicated disk, or USB boot
 - **Automation**: Full CLI automation with interactive mode
+- **Flexibility**: Three installer media setup options for different hardware configurations
 
 **Please visit and support the original Tiny11 project**: https://github.com/ntdevlabs/tiny11builder
+
+Installer Media Setup
+---------------------
+
+The interactive setup now offers **three flexible options** for the Windows installer:
+
+1. **GRUB Loopback** (Default/Recommended)
+   - Simplest: Copy ISO to `/boot/win11.iso`
+   - Works with existing GRUB setup
+   - Good if you only have one internal disk
+
+2. **Dedicated Disk** (Best for multi-disk systems)
+   - Format another internal disk for the installer
+   - **Can safely wipe all other disks** during Windows installation
+   - Good for systems with spare internal drives
+
+3. **Bootable USB** (Most flexible)
+   - Create independent bootable USB installer
+   - **Can safely wipe all internal disks** during Windows installation
+   - Works on any hardware with a spare USB drive
+
+**See [INSTALLER_MEDIA.md](INSTALLER_MEDIA.md) for detailed information on each option.**
 
 Safety notes
 ------------
 - Don't run this on a production machine unless you have a solid backup and restore plan.
 - Double-check `/etc/default/grub` and your target disk. GRUB changes affect the entire system.
-- Secure Boot must be disabled for the GRUB chainloader to work. If chainloading fails, you might want to look into wimboot or iPXE as alternatives (though those aren't implemented here yet).
+- Secure Boot must be disabled for the GRUB chainloader to work.
+- If using Option 2/3 media setup, ensure you understand which disks will be available to the Windows installer.
 
 Quick Install
 -------------
