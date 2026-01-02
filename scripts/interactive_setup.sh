@@ -245,12 +245,21 @@ Choose how to boot the Windows installer:
 
 EOF
 
-  prompt_yn "Use simple GRUB loopback setup? (Option A - recommended)" "y" && return 0
+  if prompt_yn "Use simple GRUB loopback setup? (Option A - recommended)" "y"; then
+    # Option A: GRUB loopback - clear any saved bootloader choice
+    echo "grub" > "$TMP_DIR/bootloader_choice"
+    return 0
+  fi
   
   msg "Advanced media setup..."
   if ! sudo "$SCRIPT_DIR/setup_installer_media.sh" "$ROOT_DIR/out/win11.iso"; then
     warn "Media setup did not complete. Falling back to GRUB loopback..."
-    prompt_yn "Continue with GRUB loopback setup?" "y" || return 1
+    if prompt_yn "Continue with GRUB loopback setup?" "y"; then
+      echo "grub" > "$TMP_DIR/bootloader_choice"
+      return 0
+    else
+      return 1
+    fi
   else
     # Advanced setup completed successfully
     echo ""
@@ -260,6 +269,22 @@ EOF
 }
 
 step_grub() {
+  # Only run GRUB configuration if GRUB bootloader was selected
+  if [[ -f "$TMP_DIR/bootloader_choice" ]]; then
+    local bootloader_choice
+    bootloader_choice="$(cat "$TMP_DIR/bootloader_choice")"
+    if [[ "$bootloader_choice" != "grub" ]]; then
+      msg "Step 4: Bootloader setup"
+      msg "✓ Windows bootloader selected - GRUB configuration skipped"
+      msg ""
+      msg "To boot the Windows installer:"
+      msg "  1. Reboot and enter UEFI/BIOS setup (usually Del, F2, or F12)"
+      msg "  2. Change boot order to boot from the USB/disk with Windows installer"
+      msg ""
+      return 0
+    fi
+  fi
+  
   msg "Step 4: Add GRUB entry"
   echo ""
   warn "This step requires root privileges and will modify GRUB configuration"

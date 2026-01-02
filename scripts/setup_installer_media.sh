@@ -7,11 +7,27 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ISO_SRC="${1:-$ROOT_DIR/out/win11.iso}"
+TMP_DIR="${TMP_DIR:-$ROOT_DIR/tmp}"
 INSTALLER_SIZE_GB=10
+BOOTLOADER_CHOICE_FILE="$TMP_DIR/bootloader_choice"
 
 msg() { echo "[+] $*"; }
 warn() { echo "[!] $*" >&2; }
 err() { echo "[!] $*" >&2; exit 1; }
+
+# Save bootloader choice for later use by interactive_setup.sh
+save_bootloader_choice() {
+  mkdir -p "$TMP_DIR"
+  echo "$1" > "$BOOTLOADER_CHOICE_FILE"
+}
+
+prompt_yes_no() {
+  local prompt="$1"
+  local answer
+  read -p "$prompt [y/N]: " answer < /dev/tty
+  answer="${answer,,}"
+  [[ "$answer" == "y" || "$answer" == "yes" ]]
+}
 
 require_cmd() {
   for c in "$@"; do
@@ -254,10 +270,12 @@ option_another_disk() {
   # Ask user's bootloader preference
   local bootloader
   bootloader="$(ask_bootloader_preference "disk")"
+  save_bootloader_choice "$bootloader"
   
   if [[ "$bootloader" == "grub" ]]; then
     msg "Setting up GRUB entry to boot from $partition..."
-    sudo tee /etc/grub.d/40_custom_win11 >/dev/null <<'GRUB'
+    sudo bash << 'SUDO_SCRIPT'
+cat > /etc/grub.d/40_custom_win11 << 'GRUB'
 #!/bin/sh
 menuentry "Windows 11 installer (from disk)" {
     search --no-floppy --set=iso_root --label WIN11_INSTALL
@@ -266,7 +284,8 @@ menuentry "Windows 11 installer (from disk)" {
     chainloader (loop)/efi/boot/bootx64.efi
 }
 GRUB
-    sudo chmod +x /etc/grub.d/40_custom_win11
+chmod +x /etc/grub.d/40_custom_win11
+SUDO_SCRIPT
     
     msg "Regenerating grub.cfg..."
     sudo grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || sudo grub2-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
@@ -372,6 +391,7 @@ option_usb() {
   # Ask user's bootloader preference for USB
   local bootloader
   bootloader="$(ask_bootloader_preference "usb")"
+  save_bootloader_choice "$bootloader"
   
   msg ""
   if [[ "$bootloader" == "grub" ]]; then
