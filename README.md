@@ -39,7 +39,7 @@ This project is inspired by and based on the excellent work of the [Tiny11 Proje
 
 Kudos to ntdevlabs for their pioneering work in creating lightweight, bloat-free Windows 11 installations. Their Tiny11Builder provided the foundation and methodology that made this Linux-based implementation possible.
 
-### Our Implementation
+### My Implementation
 - Adapts the Tiny11Builder PowerShell workflow to pure bash for Linux systems
 - Uses `wimlib-imagex` for WIM manipulation instead of DISM
 - Presets in `data/removal-presets/*.txt` are inspired by Tiny11's conservative approach
