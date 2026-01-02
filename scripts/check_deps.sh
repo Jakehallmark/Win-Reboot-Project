@@ -230,6 +230,7 @@ main() {
   check_cmd "curl" "curl"
   check_cmd "python3" "python3"
   check_cmd "unzip" "unzip"
+  check_cmd "chntpw" "chntpw"
 
   # Registry editing tool (hivexregedit OR python3-hivex)
   if command -v hivexregedit >/dev/null 2>&1; then
@@ -290,6 +291,7 @@ main() {
       check_cmd "curl" "curl"
       check_cmd "python3" "python3"
       check_cmd "unzip" "unzip"
+      check_cmd "chntpw" "chntpw"
 
       # Re-check registry editing tool (hivexregedit OR python3-hivex)
       if ! command -v hivexregedit >/dev/null 2>&1 && ! python3 -c "import hivex" 2>/dev/null; then
