@@ -167,6 +167,26 @@ download_package_zip() {
       "Received only $file_size bytes. Expected > 1KB. May be rate limited or invalid parameters."
   fi
   
+  # Check if the file is actually a ZIP archive
+  if ! file "$zip_path" | grep -qi "zip\|compress"; then
+    local file_type
+    file_type=$(file -b "$zip_path")
+    echo "[DEBUG] File type: $file_type" >&2
+    
+    # Check if it's an aria2 input file (text file with URLs)
+    if [[ "$file_type" == *"ASCII text"* ]] || [[ "$file_type" == *"text"* ]]; then
+      local content_preview
+      content_preview=$(head -c 500 "$zip_path")
+      if [[ "$content_preview" == http* ]]; then
+        fatal_error "UUP dump returned aria2 file instead of package" 20 \
+          "The download link may have expired or the build ID is invalid. This usually means the specified update ID is too old or no longer available. Try without --update-id to fetch the latest build automatically."
+      fi
+    fi
+    
+    fatal_error "Downloaded file is not a ZIP archive" 20 \
+      "File type: $file_type. The UUP dump service may have changed or the build is no longer available."
+  fi
+  
   verify_file "$zip_path" 0 "UUP dump package"
   echo "$zip_path"
 }
