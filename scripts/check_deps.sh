@@ -70,13 +70,13 @@ get_packages_for_distro() {
   case "$distro" in
     debian|ubuntu|linuxmint|pop)
       # Note: Debian/Ubuntu use python3-hivex for registry editing (hivexregedit not available)
-      echo "aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex"
+      echo "aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex chntpw"
       ;;
     fedora|rhel|centos|rocky|almalinux)
-      echo "aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex"
+      echo "aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex chntpw"
       ;;
     arch|manjaro|endeavouros)
-      echo "aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex"
+      echo "aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex chntpw"
       ;;
     *)
       echo ""
@@ -180,25 +180,25 @@ show_manual_instructions() {
     debian|ubuntu|linuxmint|pop)
       echo "For Debian/Ubuntu-based systems, copy and paste this:"
       echo ""
-      echo "  sudo apt update && sudo apt install -y aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex"
+      echo "  sudo apt update && sudo apt install -y aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex chntpw"
       echo ""
       ;;
     fedora|rhel|centos|rocky|almalinux)
       echo "For Fedora/RHEL-based systems, copy and paste this:"
       echo ""
-      echo "  sudo dnf install -y aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex"
+      echo "  sudo dnf install -y aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex chntpw"
       echo ""
       ;;
     arch|manjaro|endeavouros)
       echo "For Arch-based systems (because of course you use Arch):"
       echo ""
-      echo "  sudo pacman -S aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex"
+      echo "  sudo pacman -S aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex chntpw"
       echo ""
       ;;
     *)
       echo "For your system, you'll need these packages:"
       echo "  aria2, cabextract, wimlib/wimtools, genisoimage/xorriso,"
-      echo "  p7zip, grub, curl, python3, unzip, hivex/python3-hivex"
+      echo "  p7zip, grub, curl, python3, unzip, hivex/python3-hivex, chntpw"
       echo ""
       echo "Check your distro's package manager. You got this!"
       echo ""
