@@ -141,7 +141,7 @@ download_package_zip() {
   local zip_path="$TMP_DIR/uupdump-${UPDATE_ID}.zip"
   register_temp_file "$zip_path"
   
-  local get_url="https://uupdump.net/get.php?id=${UPDATE_ID}&pack=${LANG}&edition=${EDITIONS}&aria2=2"
+  local get_url="https://uupdump.net/get.php?id=${UPDATE_ID}&pack=${LANG}&edition=${EDITIONS}"
   echo "[+] Downloading UUP dump package: $get_url" >&2
   
   if ! curl -L "$get_url" -o "$zip_path" >&2; then
