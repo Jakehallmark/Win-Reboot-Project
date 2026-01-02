@@ -111,7 +111,7 @@ show_troubleshooting() {
 2. Install missing packages for your distribution:
 
    Debian/Ubuntu:
-   sudo apt install aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip libhivex-bin
+   sudo apt install aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex
 
    Fedora/RHEL:
    sudo dnf install aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex
@@ -120,7 +120,8 @@ show_troubleshooting() {
    sudo pacman -S aria2 cabextract wimlib cdrtools p7zip grub curl python3 hivex
 
 3. Verify installation:
-   which aria2c wimlib-imagex 7z curl python3 hivexregedit
+   which aria2c wimlib-imagex 7z curl python3
+   python3 -c "import hivex" && echo "hivex OK" || which hivexregedit
 
 For more help, see: INSTALL.md
 EOF

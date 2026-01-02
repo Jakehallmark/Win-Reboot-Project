@@ -69,7 +69,8 @@ get_packages_for_distro() {
   local distro="$1"
   case "$distro" in
     debian|ubuntu|linuxmint|pop)
-      echo "aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip libhivex-bin"
+      # Note: Debian/Ubuntu use python3-hivex for registry editing (hivexregedit not available)
+      echo "aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex"
       ;;
     fedora|rhel|centos|rocky|almalinux)
       echo "aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools curl python3 unzip hivex"
@@ -179,7 +180,7 @@ show_manual_instructions() {
     debian|ubuntu|linuxmint|pop)
       echo "For Debian/Ubuntu-based systems, copy and paste this:"
       echo ""
-      echo "  sudo apt update && sudo apt install -y aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip libhivex-bin"
+      echo "  sudo apt update && sudo apt install -y aria2 cabextract wimtools genisoimage p7zip-full grub-common curl python3 unzip python3-hivex"
       echo ""
       ;;
     fedora|rhel|centos|rocky|almalinux)
@@ -197,14 +198,14 @@ show_manual_instructions() {
     *)
       echo "For your system, you'll need these packages:"
       echo "  aria2, cabextract, wimlib/wimtools, genisoimage/xorriso,"
-      echo "  p7zip, grub, curl, python3, unzip"
+      echo "  p7zip, grub, curl, python3, unzip, hivex/python3-hivex"
       echo ""
       echo "Check your distro's package manager. You got this!"
       echo ""
       ;;
   esac
-  
-  echo "Note: hivexregedit (libhivex-bin/hivex) is required for Tiny11 registry tweaks."
+
+  echo "Note: Registry editing requires hivexregedit (Fedora/Arch) or python3-hivex (Debian/Ubuntu)."
   
   echo ""
   echo "Once installed, run this script again or proceed with:"
@@ -229,8 +230,17 @@ main() {
   check_cmd "curl" "curl"
   check_cmd "python3" "python3"
   check_cmd "unzip" "unzip"
-  check_cmd "hivexregedit" "libhivex-bin/hivex"
-  
+
+  # Registry editing tool (hivexregedit OR python3-hivex)
+  if command -v hivexregedit >/dev/null 2>&1; then
+    [[ $SILENT -eq 0 ]] && msg "Found: hivexregedit"
+  elif python3 -c "import hivex" 2>/dev/null; then
+    [[ $SILENT -eq 0 ]] && msg "Found: python3-hivex (alternative to hivexregedit)"
+  else
+    MISSING+=("hivexregedit or python3-hivex")
+    [[ $SILENT -eq 0 ]] && warn "Missing: hivexregedit or python3-hivex (needed for registry tweaks)"
+  fi
+
   # ISO building tools (one of these)
   if ! command -v genisoimage >/dev/null 2>&1 && ! command -v xorriso >/dev/null 2>&1; then
     MISSING+=("genisoimage or xorriso")
@@ -280,7 +290,12 @@ main() {
       check_cmd "curl" "curl"
       check_cmd "python3" "python3"
       check_cmd "unzip" "unzip"
-      check_cmd "hivexregedit" "libhivex-bin/hivex"
+
+      # Re-check registry editing tool (hivexregedit OR python3-hivex)
+      if ! command -v hivexregedit >/dev/null 2>&1 && ! python3 -c "import hivex" 2>/dev/null; then
+        MISSING+=("hivexregedit or python3-hivex")
+        [[ $SILENT -eq 0 ]] && warn "Missing: hivexregedit or python3-hivex"
+      fi
 
       # Re-check ISO building tools
       if ! command -v genisoimage >/dev/null 2>&1 && ! command -v xorriso >/dev/null 2>&1; then

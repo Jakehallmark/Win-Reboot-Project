@@ -95,8 +95,18 @@ build_removal_list() {
 }
 
 ensure_tools() {
-  require_commands 7z wimlib-imagex hivexregedit
-  
+  require_commands 7z wimlib-imagex
+
+  # Check for registry editing tool (hivexregedit OR python3-hivex)
+  if command -v hivexregedit >/dev/null 2>&1; then
+    HIVEX_TOOL="hivexregedit"
+  elif python3 -c "import hivex" 2>/dev/null; then
+    HIVEX_TOOL="python3-hivex"
+  else
+    fatal_error "Need hivexregedit or python3-hivex for registry tweaks" 10 \
+      "Install hivex (Fedora/Arch) or python3-hivex (Debian/Ubuntu)"
+  fi
+
   if command -v xorriso >/dev/null 2>&1; then
     ISO_TOOL="xorriso"
   elif command -v genisoimage >/dev/null 2>&1; then
@@ -110,8 +120,20 @@ ensure_tools() {
 apply_registry_tweaks() {
   local mount_dir="$1"
   [[ "$SKIP_REG" -eq 0 ]] || return 0
-  local reg_file="$WORK_DIR/bypass.reg"
-  cat >"$reg_file" <<'REG'
+
+  local hive_path="$mount_dir/Windows/System32/config/SYSTEM"
+
+  if [[ ! -f "$hive_path" ]]; then
+    warn "Registry hive not found: $hive_path"
+    return 1
+  fi
+
+  msg "Applying TPM/RAM/CPU/SB bypass (LabConfig)..."
+
+  if [[ "$HIVEX_TOOL" == "hivexregedit" ]]; then
+    # Use hivexregedit (available on Fedora/Arch)
+    local reg_file="$WORK_DIR/bypass.reg"
+    cat >"$reg_file" <<'REG'
 Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig]
@@ -121,8 +143,66 @@ Windows Registry Editor Version 5.00
 "BypassRAMCheck"=dword:00000001
 "BypassStorageCheck"=dword:00000001
 REG
-  msg "Applying TPM/RAM/CPU/SB bypass (LabConfig)..."
-  hivexregedit --merge "$mount_dir/Windows/System32/config/SYSTEM" <"$reg_file" || warn "Failed to merge registry tweaks"
+    hivexregedit --merge "$hive_path" <"$reg_file" || warn "Failed to merge registry tweaks"
+  else
+    # Use python3-hivex (available on Debian/Ubuntu)
+    python3 - "$hive_path" <<'PY' || warn "Failed to apply registry tweaks via Python"
+import sys
+import hivex
+
+hive_path = sys.argv[1]
+
+try:
+    h = hivex.Hivex(hive_path, write=True)
+
+    # Navigate to or create Setup key
+    root = h.root()
+    setup_key = None
+
+    # Find or create Setup key under root
+    for child in h.node_children(root):
+        if h.node_name(child).upper() == "SETUP":
+            setup_key = child
+            break
+
+    if setup_key is None:
+        setup_key = h.node_add_child(root, "Setup")
+
+    # Find or create LabConfig key under Setup
+    labconfig_key = None
+    for child in h.node_children(setup_key):
+        if h.node_name(child).upper() == "LABCONFIG":
+            labconfig_key = child
+            break
+
+    if labconfig_key is None:
+        labconfig_key = h.node_add_child(setup_key, "LabConfig")
+
+    # Set bypass values (REG_DWORD = 4, value = 1)
+    bypass_values = [
+        "BypassTPMCheck",
+        "BypassSecureBootCheck",
+        "BypassCPUCheck",
+        "BypassRAMCheck",
+        "BypassStorageCheck"
+    ]
+
+    for name in bypass_values:
+        # REG_DWORD type is 4, value 1 as little-endian 32-bit
+        h.node_set_value(labconfig_key, {
+            "key": name,
+            "t": 4,  # REG_DWORD
+            "value": b'\x01\x00\x00\x00'  # DWORD value 1
+        })
+
+    h.commit(None)
+    print(f"Successfully applied {len(bypass_values)} registry tweaks")
+
+except Exception as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
+PY
+  fi
 }
 
 remove_paths() {

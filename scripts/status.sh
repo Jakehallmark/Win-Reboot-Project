@@ -71,11 +71,15 @@ EOF
   # Check dependencies
   msg "Quick Dependency Check:"
   local deps_ok=0
-  for cmd in aria2c cabextract wimlib-imagex 7z curl python3 unzip hivexregedit; do
+  for cmd in aria2c cabextract wimlib-imagex 7z curl python3 unzip; do
     if command -v "$cmd" >/dev/null 2>&1; then
       deps_ok=$((deps_ok + 1))
     fi
   done
+  # Check for hivexregedit OR python3-hivex
+  if command -v hivexregedit >/dev/null 2>&1 || python3 -c "import hivex" 2>/dev/null; then
+    deps_ok=$((deps_ok + 1))
+  fi
   echo "  • $deps_ok/8 core dependencies found"
   if [[ $deps_ok -lt 8 ]]; then
     echo "    Run: ./scripts/check_deps.sh for details"
