@@ -517,16 +517,41 @@ step_fetch_iso() {
     local captured_update_id=""
     if [[ "$build_choice" == "2" ]]; then
       echo ""
-      echo "To find a working build ID:"
+      echo "To find a working build:"
       echo "  1. Visit https://uupdump.net"
       echo "  2. Select your options (channel, edition, language)"
-      echo "  3. Copy the build ID from the URL or search results"
+      echo "  3. Copy the entire URL from your browser's address bar"
       echo ""
-      read -r -p "Enter build ID (UUID format): " captured_update_id < /dev/tty
-      check_cancel "$captured_update_id"
+      echo "You can paste either:"
+      echo "  - The full URL (we'll extract the build ID)"
+      echo "  - Just the build ID (UUID format)"
+      echo ""
+      read -r -p "Paste URL or build ID: " user_input < /dev/tty
+      check_cancel "$user_input"
       
-      if [[ -z "$captured_update_id" ]]; then
-        warn "Build ID cannot be empty"
+      if [[ -z "$user_input" ]]; then
+        warn "Input cannot be empty"
+        return 1
+      fi
+      
+      # Extract build ID from URL if it looks like a URL
+      if [[ "$user_input" == *"uupdump.net"* ]] || [[ "$user_input" == http* ]]; then
+        # Try to extract id= parameter from URL
+        if [[ "$user_input" =~ id=([a-f0-9-]+) ]]; then
+          captured_update_id="${BASH_REMATCH[1]}"
+          msg "Extracted build ID: $captured_update_id"
+        else
+          warn "Could not find build ID in URL"
+          return 1
+        fi
+      else
+        # Assume it's already a build ID
+        captured_update_id="$user_input"
+      fi
+      
+      # Validate that we have something that looks like a UUID
+      if [[ ! "$captured_update_id" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]]; then
+        warn "Invalid build ID format. Expected UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
         return 1
       fi
     else
