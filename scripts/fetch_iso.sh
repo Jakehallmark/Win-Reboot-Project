@@ -144,8 +144,7 @@ download_package_zip() {
   echo "[+] Downloading UUP dump package: $get_url" >&2
   
   if ! curl -L "$get_url" -o "$zip_path" >&2; then
-    fatal_error "Failed to download UUP dump package" 20 \
-      "Check network connection and try again"
+    return 1  # Network error - will be retried
   fi
   
   # Check if we got an error response (HTML/text instead of ZIP)
@@ -156,16 +155,13 @@ download_package_zip() {
     # Likely an error message, not a real package
     local content
     content=$(cat "$zip_path" 2>/dev/null)
-    echo "[DEBUG] Small file received ($file_size bytes): $content" >&2
     
     # Check if it's an error message
     if [[ "$content" == *"error"* ]] || [[ "$content" == *"ERROR"* ]] || [[ "$content" == *"not found"* ]]; then
-      fatal_error "UUP dump returned error" 20 \
-        "Response: $content. The selected edition/language combination may not be available for this build."
+      return 2  # Build not available - will be retried with different channel
     fi
     
-    fatal_error "UUP dump package too small" 20 \
-      "Received only $file_size bytes. Expected > 1KB. May be rate limited or invalid parameters."
+    return 2  # Unknown error - will be retried
   fi
   
   # Check if the file is actually a ZIP archive (use -b to get only the description, not the filename)
@@ -175,43 +171,15 @@ download_package_zip() {
     
     # Check if it's an error response (HTML, aria2, or plain text)
     if [[ "$file_type" == *"HTML"* ]] || [[ "$file_type" == *"text"* ]]; then
-      local content_preview
-      content_preview=$(head -c 500 "$zip_path")
-      
-      echo "" >&2
-      echo "╔═══════════════════════════════════════════════════════════════╗" >&2
-      echo "║                    BUILD UNAVAILABLE                          ║" >&2
-      echo "╚═══════════════════════════════════════════════════════════════╝" >&2
-      echo "" >&2
-      echo "Error: Build ID $UPDATE_ID has expired or is not available" >&2
-      echo "" >&2
-      echo "The UUP dump service returned: $file_type" >&2
-      echo "" >&2
-      echo "This typically happens when:" >&2
-      echo "  - The build is too old" >&2
-      echo "  - The packaging server is down" >&2
-      echo "  - The edition/language combination is not available" >&2
-      echo "" >&2
-      echo "RECOMMENDED SOLUTIONS:" >&2
-      echo "" >&2
-      echo "1. Run interactive setup (auto-detects latest build):" >&2
-      echo "   ./scripts/interactive_setup.sh" >&2
-      echo "" >&2
-      echo "2. Try Release Preview channel (usually more available):" >&2
-      echo "   ./scripts/fetch_iso.sh --channel rp" >&2
-      echo "" >&2
-      echo "3. Check UUP dump website for available builds:" >&2
-      echo "   https://uupdump.net" >&2
-      echo "" >&2
-      exit 20
+      return 2  # Build unavailable - will be retried with different channel
     fi
     
-    fatal_error "Downloaded file is not a ZIP archive" 20 \
-      "File type: $file_type. The UUP dump service may have changed or the build is no longer available."
+    return 2  # Non-ZIP file
   fi
   
   verify_file "$zip_path" 0 "UUP dump package"
   echo "$zip_path"
+  return 0
 }
 
 run_uupdump_package() {
@@ -252,32 +220,81 @@ main() {
   # Check prerequisites
   require_commands unzip aria2c curl python3
   
-  # Detect or use provided update ID
-  [[ -n "$UPDATE_ID" ]] || detect_latest_update_id
-  msg "Using update ID: $UPDATE_ID"
+  # Try to download with current channel, then retry with Release Preview if it fails
+  local original_channel="$CHANNEL"
+  local attempt=1
+  local max_attempts=2
   
-  if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "Dry run only. Would fetch: id=$UPDATE_ID lang=$LANG editions=$EDITIONS arch=$ARCH channel=$CHANNEL"
-    echo "Estimated download size: ~5-6 GB"
-    echo "Output location: $OUT_DIR/win11.iso"
-    exit 0
-  fi
-  
-  # Download and extract package
-  local zip_path
-  zip_path="$(download_package_zip)"
-  
-  local pkg_dir="$TMP_DIR/uupdump-${UPDATE_ID}"
-  rm -rf "$pkg_dir"
-  
-  msg "Extracting UUP dump package..."
-  unzip -q "$zip_path" -d "$pkg_dir" 2>&1 || 
-    fatal_error "Failed to extract package" 40 "ZIP file may be corrupted"
-  
-  [[ -x "$pkg_dir/uup_download_linux.sh" ]] || chmod +x "$pkg_dir/uup_download_linux.sh"
-  
-  # Run the build process
-  run_uupdump_package "$pkg_dir"
+  while [[ $attempt -le $max_attempts ]]; do
+    msg "Download attempt $attempt/$max_attempts (channel: $CHANNEL)"
+    echo "" >&2
+    
+    # Detect or use provided update ID
+    [[ -n "$UPDATE_ID" ]] || detect_latest_update_id
+    msg "Using update ID: $UPDATE_ID"
+    
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      echo "Dry run only. Would fetch: id=$UPDATE_ID lang=$LANG editions=$EDITIONS arch=$ARCH channel=$CHANNEL"
+      echo "Estimated download size: ~5-6 GB"
+      echo "Output location: $OUT_DIR/win11.iso"
+      exit 0
+    fi
+    
+    # Try to download and extract package
+    local zip_path
+    if zip_path="$(download_package_zip)"; then
+      # Success! Continue with extraction
+      local pkg_dir="$TMP_DIR/uupdump-${UPDATE_ID}"
+      rm -rf "$pkg_dir"
+      
+      msg "Extracting UUP dump package..."
+      unzip -q "$zip_path" -d "$pkg_dir" 2>&1 || 
+        fatal_error "Failed to extract package" 40 "ZIP file may be corrupted"
+      
+      [[ -x "$pkg_dir/uup_download_linux.sh" ]] || chmod +x "$pkg_dir/uup_download_linux.sh"
+      
+      # Run the build process
+      run_uupdump_package "$pkg_dir"
+      return 0  # Success
+    else
+      local download_result=$?
+      if [[ $download_result -eq 2 ]] && [[ $attempt -lt $max_attempts ]] && [[ "$CHANNEL" != "rp" ]]; then
+        # Build unavailable (error 2) - retry with Release Preview channel
+        msg "Current channel returned unavailable build, trying Release Preview..."
+        CHANNEL="rp"
+        UPDATE_ID=""  # Reset to detect new ID for new channel
+        ((attempt++))
+        echo "" >&2
+        continue
+      else
+        # Network error or max attempts reached
+        echo "" >&2
+        echo "╔═══════════════════════════════════════════════════════════════╗" >&2
+        echo "║           UUP DUMP SERVICE TEMPORARILY UNAVAILABLE            ║" >&2
+        echo "╚═══════════════════════════════════════════════════════════════╝" >&2
+        echo "" >&2
+        echo "All available channels are returning unavailable builds." >&2
+        echo "" >&2
+        echo "This usually means:" >&2
+        echo "  - The UUP dump service is experiencing issues" >&2
+        echo "  - All current builds are too old to be packaged" >&2
+        echo "  - The service is performing maintenance" >&2
+        echo "" >&2
+        echo "SUGGESTIONS:" >&2
+        echo "" >&2
+        echo "1. Wait a few minutes and try again:" >&2
+        echo "   ./scripts/fetch_iso.sh" >&2
+        echo "" >&2
+        echo "2. Check UUP dump status:" >&2
+        echo "   https://uupdump.net" >&2
+        echo "" >&2
+        echo "3. Use a known working build ID (if you have one):" >&2
+        echo "   ./scripts/fetch_iso.sh --update-id <BUILD_ID>" >&2
+        echo "" >&2
+        exit 20
+      fi
+    fi
+  done
 }
 
 main "$@"
