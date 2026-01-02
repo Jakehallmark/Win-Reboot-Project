@@ -3,6 +3,10 @@ set -euo pipefail
 
 # Win-Reboot-Project: All-in-One Windows 11 Setup
 # Inspired by the Tiny11 Project by ntdevlabs
+#
+# Usage:
+#   Local:  ./win11-setup.sh
+#   Remote: curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/win11-setup.sh | bash
 
 #============================================================================
 # CONFIGURATION
@@ -242,17 +246,26 @@ step_tiny11() {
     
     wimlib-imagex mountrw "$wim_file" "$img" "$mount_dir" || err "Failed to mount image $img"
     
-    # Load preset
+    # Load preset (local or download from GitHub)
     local preset_file="$ROOT_DIR/data/removal-presets/${preset}.txt"
     if [[ ! -f "$preset_file" ]]; then
-      preset_file="$SCRIPT_DIR/data/removal-presets/${preset}.txt"
+      preset_file="$TMP_DIR/removal-presets/${preset}.txt"
+      if [[ ! -f "$preset_file" ]]; then
+        msg "Downloading preset from GitHub..."
+        mkdir -p "$TMP_DIR/removal-presets"
+        local preset_url="https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/data/removal-presets/${preset}.txt"
+        if ! curl -fsSL "$preset_url" -o "$preset_file" 2>/dev/null; then
+          warn "Failed to download preset, continuing without package removal"
+          wimlib-imagex unmount "$mount_dir" --commit
+          continue
+        fi
+      fi
     fi
     
     if [[ -f "$preset_file" ]]; then
       msg "Removing packages from preset: $preset"
       while IFS= read -r pkg; do
         [[ -z "$pkg" || "$pkg" =~ ^# ]] && continue
-        local pkg_path="$mount_dir/Windows/System32/appraiserres.dll"
         find "$mount_dir" -type d -iname "*$pkg*" 2>/dev/null | while read -r dir; do
           rm -rf "$dir" 2>/dev/null || true
         done

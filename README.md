@@ -4,13 +4,21 @@ Download, customize, and boot Windows 11 from Linux with a single command.
 
 ## Quick Start
 
+### Option 1: One-Liner (No Git Clone Required)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/win11-setup.sh | bash
+```
+
+### Option 2: Clone and Run
+
 ```bash
 git clone https://github.com/Jakehallmark/Win-Reboot-Project.git
 cd Win-Reboot-Project
 ./win11-setup.sh
 ```
 
-That's it! The script will guide you through everything.
+Both methods work identically! The script auto-downloads presets if needed.
 
 ## What It Does
 
