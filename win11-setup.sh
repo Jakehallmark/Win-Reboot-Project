@@ -90,6 +90,39 @@ copy_tree() {
   cp -a "$src"/. "$dst"/ || err "Failed to copy tree"
 }
 
+copy_tree_progress() {
+  local src="$1"
+  local dst="$2"
+
+  mkdir -p "$dst"
+
+  # Prefer rsync progress bar (best UX)
+  if command -v rsync >/dev/null 2>&1; then
+    msg "Copying with rsync progress..."
+    sudo rsync -a --info=progress2 \
+      --no-owner --no-group --no-perms \
+      "$src"/ "$dst"/ || err "rsync copy failed"
+    return 0
+  fi
+
+  # Fallback: pv with tar (shows throughput + progress)
+  if command -v pv >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
+    msg "Copying with pv progress..."
+    local total_bytes
+    total_bytes="$(du -sb "$src" 2>/dev/null | awk '{print $1}')"
+    [[ -n "${total_bytes:-}" ]] || total_bytes=0
+
+    (cd "$src" && tar -cf - .) \
+      | pv -s "$total_bytes" \
+      | (cd "$dst" && sudo tar -xpf -) || err "pv/tar copy failed"
+    return 0
+  fi
+
+  # Last resort
+  warn "No rsync/pv available. Copying without progress..."
+  sudo cp -a --no-preserve=ownership "$src"/. "$dst"/ || err "Copy failed"
+}
+
 human_size() {
   # bytes -> human
   local b="$1"
@@ -674,8 +707,7 @@ format_and_copy_to_fat32_partition() {
   cleanup_mounts+=("$mnt")
 
   msg "Copying installer files (UEFI)..."
-  # FAT32 cannot preserve Unix ownership; drop ownership preservation to avoid noisy failures.
-  sudo cp -a --no-preserve=ownership "$src_tree"/. "$mnt"/ || err "Copy failed"
+  copy_tree_progress "$src_tree" "$mnt"
   sync
 }
 
