@@ -596,29 +596,32 @@ step_fetch_iso() {
       mapfile -t edition_list <<< "$available_editions"
       local ed_idx=1
       local -A edition_map
+      local default_idx=1
+
       for ed in "${edition_list[@]}"; do
         echo "  $ed_idx) $ed"
         edition_map[$ed_idx]="$ed"
+        # Set Professional as the default if available
+        if [[ "${ed,,}" == "professional" ]]; then
+          default_idx=$ed_idx
+        fi
         ((ed_idx++))
       done
-      echo "  $ed_idx) All editions (includes all above)"
-      edition_map[$ed_idx]="all"
 
       echo ""
+      echo "  (Note: Select ONE edition. Multi-edition ISOs are not supported by UUP dump.)"
+      echo ""
       local edition_choice
-      read -r -p "Choice [1-$ed_idx, default $ed_idx]: " edition_choice < /dev/tty
-      edition_choice="${edition_choice:-$ed_idx}"
+      read -r -p "Choice [1-$((ed_idx-1)), default $default_idx]: " edition_choice < /dev/tty
+      edition_choice="${edition_choice:-$default_idx}"
       check_cancel "$edition_choice"
 
       local selected_edition="${edition_map[$edition_choice]}"
-      if [[ "$selected_edition" == "all" ]]; then
-        selected_edition=$(IFS=,; echo "${edition_list[*]}")
-      fi
       if [[ -n "$selected_edition" ]]; then
         fetch_args+=(--edition "$selected_edition")
       else
-        warn "Invalid choice, using first available edition"
-        fetch_args+=(--edition "${edition_list[0]}")
+        warn "Invalid choice, using Professional"
+        fetch_args+=(--edition "professional")
       fi
 
       echo ""
@@ -627,35 +630,64 @@ step_fetch_iso() {
       mapfile -t lang_list <<< "$available_languages"
       local lang_idx=1
       local -A lang_map
+      local default_lang_idx=1
+
+      # Prioritize common languages at the top
+      local -a priority_langs=("en-us" "en-gb" "es-es" "fr-fr" "de-de" "pt-br" "it-it" "ja-jp" "ko-kr" "zh-cn")
+      local -a sorted_langs=()
+      local -a other_langs=()
+
+      # Separate priority languages from others
+      for lang in "${lang_list[@]}"; do
+        local is_priority=0
+        for p in "${priority_langs[@]}"; do
+          if [[ "$lang" == "$p" ]]; then
+            is_priority=1
+            break
+          fi
+        done
+        if [[ $is_priority -eq 1 ]]; then
+          sorted_langs+=("$lang")
+        else
+          other_langs+=("$lang")
+        fi
+      done
+
+      # Combine: priority languages first, then others
+      local -a display_langs=("${sorted_langs[@]}" "${other_langs[@]}")
 
       local max_show=10
       local shown=0
-      for lang in "${lang_list[@]}"; do
+      for lang in "${display_langs[@]}"; do
         if [[ $shown -lt $max_show ]]; then
           echo "  $lang_idx) $lang"
           lang_map[$lang_idx]="$lang"
+          # Set en-us as default if available
+          if [[ "$lang" == "en-us" ]]; then
+            default_lang_idx=$lang_idx
+          fi
           ((lang_idx++))
           shown=$((shown + 1))
         fi
       done
 
-      if [[ ${#lang_list[@]} -gt $max_show ]]; then
-        echo "  $lang_idx) Other (enter manually from ${#lang_list[@]} available)"
+      if [[ ${#display_langs[@]} -gt $max_show ]]; then
+        echo "  $lang_idx) Other (enter manually from ${#display_langs[@]} available)"
         lang_map[$lang_idx]="other"
         ((lang_idx++))
       fi
 
       echo ""
       local lang_choice
-      read -r -p "Choice [1-$((lang_idx-1)), default 1]: " lang_choice < /dev/tty
-      lang_choice="${lang_choice:-1}"
+      read -r -p "Choice [1-$((lang_idx-1)), default $default_lang_idx]: " lang_choice < /dev/tty
+      lang_choice="${lang_choice:-$default_lang_idx}"
       check_cancel "$lang_choice"
 
       local selected_lang="${lang_map[$lang_choice]}"
       if [[ "$selected_lang" == "other" ]]; then
         echo ""
         echo "Available languages:"
-        printf "  %s\n" "${lang_list[@]}"
+        printf "  %s\n" "${display_langs[@]}"
         echo ""
         read -r -p "Enter language code: " selected_lang < /dev/tty
         check_cancel "$selected_lang"
@@ -664,8 +696,8 @@ step_fetch_iso() {
       if [[ -n "$selected_lang" && "$selected_lang" != "other" ]]; then
         fetch_args+=(--lang "$selected_lang")
       else
-        warn "Invalid choice, using ${lang_list[0]}"
-        fetch_args+=(--lang "${lang_list[0]}")
+        warn "Invalid choice, using en-us"
+        fetch_args+=(--lang "en-us")
       fi
 
       echo ""
