@@ -683,7 +683,7 @@ ask_bootloader() {
   echo "  2) Windows/UEFI boot (no GRUB changes)"
   echo ""
   local answer
-  read -r -p "Select bootloader (1 or 2): " answer < /dev/tty
+  read -r -p "Select bootloader (Grub - 1 or Windows - 2): " answer < /dev/tty
 
   case "$answer" in
     2) echo "windows" ;;
