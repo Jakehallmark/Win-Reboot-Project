@@ -282,9 +282,9 @@ main() {
   fi
 
   msg "Mounting image index $IMAGE_INDEX..."
-  if ! wimlib-imagex mount "$install_img" "$IMAGE_INDEX" "$WORK_DIR/mount" 2>&1; then
+  if ! wimlib-imagex mount "$install_img" "$IMAGE_INDEX" "$WORK_DIR/mount" --readwrite 2>&1; then
     fatal_error "Failed to mount WIM image" 40 \
-      "Image index may be invalid or wimlib encountered an error"
+      "Image index may be invalid or wimlib encountered an error. Try --rebuild flag."
   fi
   
   # Ensure unmount on cleanup
