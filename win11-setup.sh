@@ -17,7 +17,7 @@ TMP_DIR="${TMP_DIR:-$ROOT_DIR/tmp}"
 OUT_DIR="$ROOT_DIR/out"
 ISO_PATH="$OUT_DIR/win11.iso"
 
-INSTALLER_VOL_LABEL="WIN11_INSTALL"
+INSTALLER_VOL_LABEL="WIN11_INST"
 WIM_SPLIT_MB=3800   # keeps each .swm < 4GB for FAT32
 
 mkdir -p "$TMP_DIR" "$OUT_DIR"
@@ -94,11 +94,16 @@ human_size() {
   # bytes -> human
   local b="$1"
   awk -v b="$b" 'BEGIN{
-    split("B KB MB TB",u," ");
+    split("B KB MB GB TB",u," ");
     i=1;
     while (b>=1024 && i<5){b/=1024;i++}
     printf "%.2f %s\n", b, u[i]
   }'
+}
+
+validate_vol_label() {
+  local label="$1"
+  [[ ${#label} -le 11 ]] || err "Volume label too long (max 11 chars): $label"
 }
 
 #============================================================================
@@ -659,6 +664,7 @@ format_and_copy_to_fat32_partition() {
   local src_tree="$2"
 
   msg "Formatting $part as FAT32..."
+  validate_vol_label "$INSTALLER_VOL_LABEL"
   sudo mkfs.fat -F32 -n "$INSTALLER_VOL_LABEL" "$part" >/dev/null || err "Failed to format $part"
 
   local mnt
