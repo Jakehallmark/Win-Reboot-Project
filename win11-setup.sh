@@ -94,11 +94,174 @@ human_size() {
   # bytes -> human
   local b="$1"
   awk -v b="$b" 'BEGIN{
-    split("B KB MB GB TB",u," ");
+    split("B KB MB TB",u," ");
     i=1;
     while (b>=1024 && i<5){b/=1024;i++}
     printf "%.2f %s\n", b, u[i]
   }'
+}
+
+#============================================================================
+# DRIVER INJECTION
+#============================================================================
+
+DRIVERS_DIR="${DRIVERS_DIR:-$ROOT_DIR/drivers}"
+
+require_extractors_for_drivers() {
+  # We'll use what exists; require only what we actually need.
+  require_cmd find awk sed
+}
+
+extract_any_driver_payloads() {
+  local in_dir="$1"
+  local out_dir="$2"
+  mkdir -p "$out_dir"
+
+  shopt -s nullglob
+  local f
+  for f in "$in_dir"/*; do
+    [[ -f "$f" ]] || continue
+    case "${f,,}" in
+      *.zip)
+        command -v unzip >/dev/null 2>&1 || err "Need unzip to extract: $f"
+        mkdir -p "$out_dir/$(basename "$f").d"
+        unzip -q "$f" -d "$out_dir/$(basename "$f").d" || true
+        ;;
+      *.cab)
+        command -v cabextract >/dev/null 2>&1 || err "Need cabextract to extract: $f"
+        mkdir -p "$out_dir/$(basename "$f").d"
+        cabextract -q -d "$out_dir/$(basename "$f").d" "$f" || true
+        ;;
+      *.msi)
+        # MSI can contain drivers; extraction is best-effort.
+        # 7z usually works if installed.
+        if command -v 7z >/dev/null 2>&1; then
+          mkdir -p "$out_dir/$(basename "$f").d"
+          7z x -y -o"$out_dir/$(basename "$f").d" "$f" >/dev/null 2>&1 || true
+        else
+          warn "Skipping MSI (no 7z): $f"
+        fi
+        ;;
+      *.exe)
+        # EXE extraction is best-effort. Many vendor EXEs are 7z/self-extracting.
+        if command -v 7z >/dev/null 2>&1; then
+          mkdir -p "$out_dir/$(basename "$f").d"
+          7z x -y -o"$out_dir/$(basename "$f").d" "$f" >/dev/null 2>&1 || true
+        else
+          warn "Skipping EXE (no 7z): $f"
+        fi
+        ;;
+      *.inf)
+        # Raw INF dropped directly in drivers dir: just copy its folder later.
+        ;;
+      *)
+        warn "Unknown driver payload type, ignoring: $f"
+        ;;
+    esac
+  done
+  shopt -u nullglob
+}
+
+collect_inf_roots() {
+  # Print unique directories that contain .inf files.
+  local search_dir="$1"
+  find "$search_dir" -type f -iname "*.inf" -print0 2>/dev/null \
+    | xargs -0 -n1 dirname 2>/dev/null \
+    | awk '!seen[$0]++'
+}
+
+stage_inf_drivers_into_tree() {
+  local iso_tree="$1"
+  local inf_root_list="$2"
+
+  local dest="$iso_tree/sources/\$OEM\$/\$\$/INFDRIVERS"
+  mkdir -p "$dest"
+
+  local n=0
+  while IFS= read -r dir; do
+    [[ -d "$dir" ]] || continue
+    n=$((n+1))
+    mkdir -p "$dest/DriverSet$n"
+    # Copy only what's needed for INF install (INF/SYS/CAT/DLL plus supporting files).
+    cp -a "$dir"/. "$dest/DriverSet$n"/ 2>/dev/null || true
+  done <<< "$inf_root_list"
+
+  msg "Staged $n INF driver set(s) to $dest"
+}
+
+patch_boot_wim_to_drvload_oem_drivers() {
+  local iso_tree="$1"
+  local boot_wim="$iso_tree/sources/boot.wim"
+  [[ -f "$boot_wim" ]] || err "boot.wim not found at $boot_wim"
+
+  require_cmd wimlib-imagex
+
+  local mount_dir
+  mount_dir="$(mktemp_dir)"
+
+  msg "Patching boot.wim (index 2) to auto-load INF drivers in WinPE..."
+  wimlib-imagex mountrw "$boot_wim" 2 "$mount_dir" || err "Failed to mount boot.wim index 2"
+
+  local snc="$mount_dir/Windows/System32/startnet.cmd"
+  [[ -f "$snc" ]] || err "startnet.cmd not found inside boot.wim"
+
+  # Back up original once
+  [[ -f "$snc.orig" ]] || cp -a "$snc" "$snc.orig" 2>/dev/null || true
+
+  cat > "$snc" <<'CMD'
+@echo off
+wpeinit
+
+rem --- Auto-load any OEM-staged INF drivers (storage/network/etc) ---
+set DRVROOT=X:\sources\$OEM$\$$\INFDRIVERS
+if exist "%DRVROOT%" (
+  for /r "%DRVROOT%" %%I in (*.inf) do (
+    drvload "%%I" >nul 2>&1
+  )
+)
+
+rem --- Launch Windows Setup ---
+X:\sources\setup.exe
+CMD
+
+  wimlib-imagex unmount "$mount_dir" --commit || err "Failed to commit boot.wim changes"
+}
+
+inject_drivers_into_iso_tree() {
+  local iso_tree="$1"
+  require_extractors_for_drivers
+
+  if [[ ! -d "$DRIVERS_DIR" ]]; then
+    msg "No drivers directory found ($DRIVERS_DIR). Skipping driver injection."
+    return 0
+  fi
+
+  # Create a temp extraction workspace
+  local work="$TMP_DIR/driver_work"
+  rm -rf "$work"
+  mkdir -p "$work/extracted"
+
+  msg "Collecting driver payloads from: $DRIVERS_DIR"
+  extract_any_driver_payloads "$DRIVERS_DIR" "$work/extracted"
+
+  # Search both: original drivers dir + extracted results
+  local inf_roots=""
+  inf_roots="$(
+    {
+      collect_inf_roots "$DRIVERS_DIR"
+      collect_inf_roots "$work/extracted"
+    } | awk '!seen[$0]++'
+  )"
+
+  if [[ -z "${inf_roots// }" ]]; then
+    warn "No .inf drivers found in $DRIVERS_DIR (or extracted payloads). Skipping."
+    return 0
+  fi
+
+  stage_inf_drivers_into_tree "$iso_tree" "$inf_roots"
+  patch_boot_wim_to_drvload_oem_drivers "$iso_tree"
+
+  msg "✓ Driver injection complete (WinPE will drvload all staged INFs)."
 }
 
 confirm_destruction() {
@@ -467,6 +630,9 @@ prepare_iso_tree_for_copy_media() {
   fi
 
   ensure_wim_split_for_fat32_tree "$out_tree"
+  
+  # Inject drivers if available
+  inject_drivers_into_iso_tree "$out_tree"
 }
 
 ask_bootloader() {
