@@ -5,6 +5,7 @@ set -euo pipefail
 # Default: Retail, x64, en-us, Professional. Produces out/win11.iso.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/lib_error.sh" 2>/dev/null || {
   echo "[!] Error: Cannot load error handling library" >&2
   echo "[!] Make sure lib_error.sh exists in $SCRIPT_DIR" >&2
@@ -15,8 +16,8 @@ CHANNEL="retail"
 ARCH="amd64"
 LANG="en-us"
 EDITIONS="professional"
-OUT_DIR="${OUT_DIR:-$(pwd)/out}"
-TMP_DIR="${TMP_DIR:-$(pwd)/tmp}"
+OUT_DIR="${OUT_DIR:-$ROOT_DIR/out}"
+TMP_DIR="${TMP_DIR:-$ROOT_DIR/tmp}"
 UPDATE_ID="${UPDATE_ID:-}"
 DRY_RUN=0
 
