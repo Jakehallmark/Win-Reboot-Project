@@ -224,16 +224,15 @@ rebuild_iso() {
   local iso_out="$2"
   msg "Rebuilding ISO -> $iso_out"
   if [[ "$ISO_TOOL" == "xorriso" ]]; then
-    xorriso -as mkisofs -iso-level 3 -udf -D -N \
+    xorriso -as mkisofs -iso-level 3 -D -N \
       -V "WIN11_TINY" \
       -b "boot/etfsboot.com" -no-emul-boot -boot-load-size 8 -boot-info-table \
       -eltorito-alt-boot -eltorito-platform efi -eltorito-boot "efi/microsoft/boot/efisys.bin" -no-emul-boot \
       -o "$iso_out" "$src_dir" >/dev/null
   else
-    genisoimage -udf -iso-level 3 -D -N \
+    genisoimage -iso-level 3 -D -N \
       -V "WIN11_TINY" \
       -b "boot/etfsboot.com" -no-emul-boot -boot-load-size 8 -boot-info-table \
-      -eltorito-alt-boot -eltorito-platform efi -eltorito-boot "efi/microsoft/boot/efisys.bin" -no-emul-boot \
       -o "$iso_out" "$src_dir" >/dev/null
   fi
   msg "ISO rebuilt"
@@ -282,9 +281,9 @@ main() {
   fi
 
   msg "Mounting image index $IMAGE_INDEX..."
-  if ! wimlib-imagex mount "$install_img" "$IMAGE_INDEX" "$WORK_DIR/mount" --readwrite 2>&1; then
+  if ! wimlib-imagex mountrw "$install_img" "$IMAGE_INDEX" "$WORK_DIR/mount" 2>&1; then
     fatal_error "Failed to mount WIM image" 40 \
-      "Image index may be invalid or wimlib encountered an error. Try --rebuild flag."
+      "Image index may be invalid or wimlib encountered an error."
   fi
   
   # Ensure unmount on cleanup
@@ -298,7 +297,7 @@ main() {
   fi
 
   msg "Committing changes..."
-  if ! wimlib-imagex unmount "$WORK_DIR/mount" --commit 2>&1; then
+  if ! wimlib-imagex unmount "$WORK_DIR/mount" --commit --rebuild 2>&1; then
     warn "Unmount with commit failed, trying without commit..."
     wimlib-imagex unmount "$WORK_DIR/mount" 2>/dev/null || true
     fatal_error "Failed to commit WIM changes" 40 \
