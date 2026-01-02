@@ -221,8 +221,46 @@ step_tiny11() {
   echo ""
 }
 
+step_media_setup() {
+  msg "Step 3: Set up installer media"
+  echo ""
+  
+  cat <<'EOF'
+Choose how to boot the Windows installer:
+
+  Option A) GRUB loopback (simple, installer runs from /boot)
+            - Fastest setup
+            - Cannot format the disk containing /boot during installation
+            - You'll install Windows on a different disk
+
+  Option B) Dedicated partition/disk (more flexible)
+            - Create 10GB partition on current drive, or use another disk
+            - Can safely format all disks during Windows installation
+            - More setup required
+
+  Option C) Bootable USB (most flexible)
+            - Create bootable USB from ISO
+            - Completely independent from internal disks
+            - Can safely format ALL disks during Windows installation
+
+EOF
+
+  prompt_yn "Use simple GRUB loopback setup? (Option A - recommended)" "y" && return 0
+  
+  msg "Advanced media setup..."
+  if ! sudo "$SCRIPT_DIR/setup_installer_media.sh" "$ROOT_DIR/out/win11.iso"; then
+    warn "Media setup did not complete. Falling back to GRUB loopback..."
+    prompt_yn "Continue with GRUB loopback setup?" "y" || return 1
+  else
+    # Advanced setup completed successfully
+    echo ""
+    msg "✓ Installer media setup complete!"
+    return 0
+  fi
+}
+
 step_grub() {
-  msg "Step 3: Add GRUB entry"
+  msg "Step 4: Add GRUB entry"
   echo ""
   warn "This step requires root privileges and will modify GRUB configuration"
   
@@ -236,15 +274,24 @@ step_grub() {
 }
 
 step_reboot() {
-  msg "Step 4: Reboot to installer"
+  msg "Step 5: Reboot to installer"
   echo ""
   warn "Your system will reboot in 10 seconds!"
-  warn "At the GRUB menu, select 'Windows 11 installer (ISO loop)'"
+  
+  if [[ -f /boot/win11.iso ]]; then
+    warn "At the GRUB menu, select 'Windows 11 installer (ISO loop)'"
+  else
+    warn "At the GRUB menu, select 'Windows 11 installer (from disk)' or boot from USB"
+  fi
   echo ""
   
   prompt_yn "Reboot now?" "n" || {
     msg "Installation prepared. Reboot manually when ready."
-    msg "At GRUB menu, select: 'Windows 11 installer (ISO loop)'"
+    if [[ -f /boot/win11.iso ]]; then
+      msg "At GRUB menu, select: 'Windows 11 installer (ISO loop)'"
+    else
+      msg "At GRUB menu, select: 'Windows 11 installer (from disk)' or boot from USB"
+    fi
     return 0
   }
   
@@ -258,6 +305,7 @@ main() {
   check_dependencies
   step_fetch_iso
   step_tiny11
+  step_media_setup
   step_grub
   step_reboot
   
