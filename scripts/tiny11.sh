@@ -293,16 +293,22 @@ main() {
     remove_paths "$WORK_DIR/mount"
     apply_registry_tweaks "$WORK_DIR/mount"
   else
-    msg "Preset 'vanilla' selected; skipping removals."
+    msg "Preset 'vanilla' selected; skipping removals and tweaks."
   fi
 
   msg "Committing changes..."
-  if ! wimlib-imagex unmount "$WORK_DIR/mount" --commit --rebuild 2>&1; then
+  local unmount_flags="--commit --rebuild"
+  [[ "$PRESET" == "vanilla" ]] && unmount_flags="$unmount_flags --force"
+  
+  if ! wimlib-imagex unmount "$WORK_DIR/mount" $unmount_flags 2>&1; then
     warn "Unmount with commit failed, trying without commit..."
     wimlib-imagex unmount "$WORK_DIR/mount" 2>/dev/null || true
     fatal_error "Failed to commit WIM changes" 40 \
       "Changes to Windows image could not be saved"
   fi
+  
+  # Wait for wimlib staging files to be fully cleaned up
+  sleep 2
 
   rebuild_iso "$WORK_DIR/iso" "$OUT_ISO"
   success_msg "Done. Output ISO: $OUT_ISO"
