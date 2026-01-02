@@ -582,14 +582,12 @@ step_fetch_iso() {
       echo ""
       fetch_args+=(--channel "$selected_channel")
       fetch_args+=(--arch "$selected_arch")
-      [[ -n "$captured_update_id" ]] && fetch_args+=(--update-id "$captured_update_id")
       msg "Configured settings: ${fetch_args[*]}"
       echo ""
     else
       echo ""
       fetch_args+=(--channel "$selected_channel")
       fetch_args+=(--arch "$selected_arch")
-      [[ -n "$captured_update_id" ]] && fetch_args+=(--update-id "$captured_update_id")
 
       echo "Select Edition:"
       local -a edition_list
@@ -618,7 +616,7 @@ step_fetch_iso() {
 
       local selected_edition="${edition_map[$edition_choice]}"
       if [[ -n "$selected_edition" ]]; then
-        fetch_args+=(--edition "$selected_edition")
+        fetch_args+=(--edition "${selected_edition,,}")
       else
         warn "Invalid choice, using Professional"
         fetch_args+=(--edition "professional")
