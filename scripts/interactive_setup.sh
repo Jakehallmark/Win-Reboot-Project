@@ -155,26 +155,70 @@ To get started, you need to find a Windows 11 build on UUP dump:
   2. Click "Latest Dev Channel build" or search for a specific version
   3. Select your language (e.g., English (United States))
   4. Select your edition (e.g., Windows 11 Professional)
-  5. On the download options page, copy the URL from your browser's address bar
-
-The URL will look like one of these:
-  https://uupdump.net/download.php?id=BUILD_ID&pack=en-us&edition=professional
-  https://uupdump.net/download.php?id=BUILD_ID&pack=en-us&edition=core;professional
-
-Note: UUP dump allows you to create multi-edition ISOs. If you see multiple 
-editions separated by semicolons (e.g., core;professional), the script will 
-create an ISO containing all selected editions.
+  5. On the download options page, either:
+     a) Copy the URL from your browser's address bar, OR
+     b) Click the download button, save the ZIP file, and provide its path
 
 EOF
   
-  read -r -p "Paste the full UUP dump URL: " user_url < /dev/tty
+  read -r -p "Paste URL or path to ZIP file: " user_url < /dev/tty
   check_cancel "$user_url"
   
   if [[ -z "$user_url" ]]; then
-    fatal_error "URL cannot be empty" 1 \
-      "Please provide a valid UUP dump URL"
+    fatal_error "Input cannot be empty" 1 \
+      "Please provide a valid UUP dump URL or path to ZIP file"
   fi
   
+  # Check if it's a file path to an existing ZIP
+  if [[ -f "$user_url" ]]; then
+    msg "Using manually downloaded ZIP file: $user_url"
+    
+    # Extract the ZIP to tmp and run the conversion
+    local pkg_dir="$TMP_DIR/uupdump-manual"
+    rm -rf "$pkg_dir"
+    mkdir -p "$pkg_dir"
+    
+    msg "Extracting UUP dump package..."
+    if ! unzip -q "$user_url" -d "$pkg_dir" 2>&1; then
+      fatal_error "Failed to extract ZIP file" 40 \
+        "The ZIP file may be corrupted or invalid"
+    fi
+    
+    if [[ ! -x "$pkg_dir/uup_download_linux.sh" ]]; then
+      chmod +x "$pkg_dir/uup_download_linux.sh" 2>/dev/null || true
+    fi
+    
+    if [[ ! -f "$pkg_dir/uup_download_linux.sh" ]]; then
+      fatal_error "Invalid UUP dump package" 40 \
+        "ZIP file does not contain uup_download_linux.sh script"
+    fi
+    
+    msg "Running UUP dump conversion (this may take a while)..."
+    msg "This process downloads from Microsoft CDN and builds the ISO"
+    
+    if ! (cd "$pkg_dir" && bash ./uup_download_linux.sh 2>&1 | tee "$TMP_DIR/uup_build.log"); then
+      fatal_error "UUP dump conversion failed" 40 \
+        "Check $TMP_DIR/uup_build.log for details"
+    fi
+    
+    local built_iso
+    built_iso="$(find "$pkg_dir" -maxdepth 1 -type f -name '*.iso' | head -n1)"
+    
+    if [[ -z "$built_iso" ]]; then
+      fatal_error "No ISO produced" 40 \
+        "Build completed but no ISO file found. Check $TMP_DIR/uup_build.log"
+    fi
+    
+    mkdir -p "$ROOT_DIR/out"
+    msg "Moving ISO to output directory..."
+    mv "$built_iso" "$ROOT_DIR/out/win11.iso"
+    
+    msg "ISO created successfully: $ROOT_DIR/out/win11.iso"
+    echo ""
+    return 0
+  fi
+  
+  # Not a file, treat as URL
   # Extract parameters from URL
   local build_id="" language="" edition=""
   if ! extract_url_params "$user_url" "build_id" "language" "edition"; then
