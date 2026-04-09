@@ -552,6 +552,25 @@ pick_dir_macos() {
   echo "$result"
 }
 
+find_uup_download_script() {
+  local base_dir="$1"
+  local found=""
+
+  found="$(find "$base_dir" -type f -name 'uup_download_macos.sh' 2>/dev/null | head -n1)"
+  if [[ -n "$found" ]]; then
+    echo "$found"
+    return 0
+  fi
+
+  found="$(find "$base_dir" -type f -name 'uup_download_linux.sh' 2>/dev/null | head -n1)"
+  if [[ -n "$found" ]]; then
+    echo "$found"
+    return 0
+  fi
+
+  return 1
+}
+
 step_fetch_iso() {
   msg "Step 1: Fetch Windows 11 ISO"
   echo ""
@@ -624,24 +643,30 @@ EOF
   fi
   confirm_arch_mismatch_if_needed "$host_arch" "$uup_arch"
 
-  # Prefer the macOS-specific download script
+  # UUP ZIP contents are sometimes wrapped in an extra folder; search recursively.
   local uup_script=""
-  if [[ -f "$pkg_dir/uup_download_macos.sh" ]]; then
-    uup_script="$pkg_dir/uup_download_macos.sh"
-    msg "Using UUP dump macOS script"
-  elif [[ -f "$pkg_dir/uup_download_linux.sh" ]]; then
-    warn "No macOS UUP script found in ZIP; falling back to Linux script"
-    uup_script="$pkg_dir/uup_download_linux.sh"
-  else
+  uup_script="$(find_uup_download_script "$pkg_dir" || true)"
+  if [[ -z "$uup_script" ]]; then
     err "Invalid UUP dump package: no download script found"
   fi
 
+  case "$(basename "$uup_script")" in
+    uup_download_macos.sh)
+      msg "Using UUP dump macOS script"
+      ;;
+    uup_download_linux.sh)
+      warn "No macOS UUP script found in package; falling back to Linux script"
+      ;;
+  esac
+
   chmod +x "$uup_script"
+  local uup_script_dir
+  uup_script_dir="$(dirname "$uup_script")"
   msg "Running UUP dump conversion (this may take a while)..."
-  (cd "$pkg_dir" && bash "$(basename "$uup_script")") || err "UUP dump conversion failed"
+  (cd "$uup_script_dir" && bash "$(basename "$uup_script")") || err "UUP dump conversion failed"
 
   local built_iso
-  built_iso="$(find "$pkg_dir" -maxdepth 1 -type f -iname '*.iso' | head -n1)"
+  built_iso="$(find "$pkg_dir" -type f -iname '*.iso' | head -n1)"
   [[ -n "${built_iso:-}" ]] || err "No ISO produced by UUP dump"
 
   mv "$built_iso" "$ISO_PATH"
