@@ -1133,7 +1133,7 @@ function Step-Finish {
 function Show-Intro {
     Write-Host @"
 ╔═══════════════════════════════════════════════════════════════╗
-║      Win-Reboot-Project: Windows 11 Setup (Windows)          ║
+║      Win-Reboot-Project: Windows 11 Setup (Windows)           ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 Flow:
