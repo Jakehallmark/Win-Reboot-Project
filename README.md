@@ -1,65 +1,199 @@
-Win-Reboot-Project
-==================
+# Win-Reboot-Project
 
-Tooling to download a fresh, official Windows 11 ISO from Microsoft via UUP dump, optionally apply Tiny11-style trimming on Linux, and add a GRUB menu entry to boot straight into the installer (no USB). Secure Boot must be off for the GRUB loopback flow.
+Download, customize, and boot Windows 11 from Linux or macOS with a single command.
 
-Status
-------
-- Scripts are scaffolded; no binaries vendored. Downloads come directly from Microsoft CDN through the UUP dump helper.
-- Use in a VM first. This workflow modifies your bootloader and preps an on-disk installer that can wipe the machine.
+## Quick Start
 
-Prerequisites (host)
---------------------
-- Linux with GRUB and UEFI (Secure Boot disabled for loopback chainload).
-- ~15 GB free space (`~/Win-Reboot-Project/out` + `/boot/win11.iso`).
-- Packages (auto-detected in scripts but install as needed):
-  - Debian/Ubuntu: `aria2 cabextract wimtools genisoimage p7zip-full grub-common`
-  - Fedora/RHEL: `aria2 cabextract wimlib-utils genisoimage p7zip p7zip-plugins grub2-tools`
-  - Arch: `aria2 cabextract wimlib cdrtools p7zip grub`
-- Network access to Microsoft CDN and GitHub (for UUP dump helper).
+### Option 1: One-Liner (No Git Clone Required)
 
-High-level flow
----------------
-1. `scripts/fetch_iso.sh` — Resolve latest public Win11 GA build, download/build ISO via UUP dump, store at `out/win11.iso`.
-2. `scripts/tiny11.sh` — Optional interactive trimming of `install.wim/install.esd` using wimlib with presets (minimal/lite/vanilla).
-3. `scripts/grub_entry.sh` — Copy ISO to `/boot/win11.iso`, add GRUB menu entry to chainload the installer, regenerate grub.cfg.
-4. `scripts/reboot_to_installer.sh` — Sanity checks and reboot into the new GRUB entry.
-
-Tiny11 references
------------------
-- Based on `ntdevlabs/tiny11builder` PowerShell flow; this repo does not ship their scripts.
-- Presets live in `data/removal-presets/*.txt` and are intentionally conservative to keep OOBE/activation working.
-- Uses `wimlib-imagex mount` to edit the image and optional registry tweaks via `hivexregedit`/`reged`.
-
-Safety notes
-------------
-- Do not run on production machines without a tested backup/restore plan.
-- Double-check `/etc/default/grub` and target disk; GRUB edits are host-wide.
-- Secure Boot must be disabled for the GRUB chainloader. If chainload fails, consider wimboot/iPXE as a fallback (not implemented here).
-
-Quickstart (interactive defaults)
----------------------------------
-```
-# 1) Download latest public Win11 ISO (Retail, x64, en-US by default)
-./scripts/fetch_iso.sh
-
-# 2) Optional: apply Tiny11-style trimming with prompts
-./scripts/tiny11.sh out/win11.iso
-
-# 3) Add GRUB entry (copies ISO to /boot/win11.iso) and regenerate grub.cfg
-sudo ./scripts/grub_entry.sh out/win11.iso
-
-# 4) Reboot into installer (after reviewing grub.cfg)
-sudo ./scripts/reboot_to_installer.sh
+```bash
+# Works on both Linux and macOS — auto-detects your platform
+curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/win11-setup.sh | bash
 ```
 
-Testing / dry runs
-------------------
-- `scripts/fetch_iso.sh --dry-run` will show the build ID and download plan.
-- `grub_entry.sh` uses `grub-script-check` when available before touching grub.cfg.
-- Consider mounting `out/win11.iso` and `boot.wim` with 7z/wimlib to verify structure before GRUB changes.
+### Option 2: Clone and Run
 
-Next steps
-----------
-- Harden preset removal lists by diffing Tiny11Builder outputs.
-- Add distro-specific Secure Boot guidance and wimboot fallback.
+```bash
+git clone https://github.com/Jakehallmark/Win-Reboot-Project.git
+cd Win-Reboot-Project
+./win11-setup.sh   # Linux: runs directly | macOS: auto-redirects to macos-setup.sh
+```
+
+Both methods work identically on both platforms.
+
+## macOS Support
+
+macOS 14 (Sonoma), macOS 15 (Sequoia) and macOS 26 (Tahoe) are supported on both **Apple Silicon (M1/M2/M3/M4)** and **Intel** Macs.
+
+```bash
+# Run directly on macOS:
+./macos-setup.sh
+
+# Or let win11-setup.sh redirect automatically:
+./win11-setup.sh
+```
+
+### macOS Requirements
+
+- **Homebrew** — auto-prompted if missing (`aria2`, `wimlib`, `xorriso`, `cabextract`, `p7zip`)
+- **USB drive** — 8 GB minimum, 20 GB recommended
+- **macFUSE** *(optional)* — enables offline WIM trimming and FUSE-based driver injection. Install from [macfuse.io](https://macfuse.io). Without it, basic USB creation and driver injection (via `wimlib update`) still work.
+
+### Apple Silicon (M-series)
+
+Standard Windows 11 **x64** ISOs cannot boot natively on Apple Silicon. For native ARM boot, select an **ARM64** build when downloading from UUP dump. USB creation works on all Mac architectures regardless.
+
+### Intel Mac Boot
+
+Restart, immediately hold **Option (Alt)**, then select the **WIN11_INST** USB drive from Startup Manager.
+
+**T2 chip (2018+ Intel Macs):** If the USB doesn't appear, boot into macOS Recovery (Cmd+R), open Startup Security Utility, and set "Allow booting from external media" + "Reduced Security".
+
+## What It Does
+
+1. **Downloads Windows 11** - Fetches official ISO from UUP dump (uupdump.net)
+2. **Tiny11 Trimming** (optional) - Removes bloat to reduce ISO size
+3. **Sets Up Installer** - Choose GRUB loopback, USB drive, or dedicated disk
+4. **Configures Boot** - Automatic GRUB entry or UEFI boot instructions
+5. **Reboots to Installer** - Start Windows installation immediately
+
+## Requirements
+
+- **Linux or macOS** (Linux: Ubuntu/Debian/Fedora/Arch/Mint | macOS: Sonoma 14+ / Sequoia 15+)
+- **Secure Boot disabled** (required for GRUB loopback on Linux)
+- **20+ GB free disk space**
+- **Internet connection** (downloads from Microsoft CDN)
+
+The script auto-installs missing dependencies:
+- `aria2c` - Fast parallel downloads
+- `wimlib-imagex` - Windows image manipulation
+- `xorriso` - ISO creation/extraction
+- `parted` / `mkfs.fat` - Disk management (for USB/disk options)
+
+## Three Installation Methods
+
+### Option A: GRUB Loopback (Experimental — Linux only)
+- ✅ Fastest and simplest setup on Linux
+- ✅ No USB drive needed
+- ⚠️ Cannot format the disk containing `/boot` during Windows installation
+- ⚠️ Many systems will not boot Windows 11 via ISO loopback (use B or C instead)
+
+### Option B: Dedicated Disk
+- ✅ Uses another internal drive
+- ✅ Can safely wipe all other disks during Windows installation
+- ✅ Choose GRUB or Windows bootloader
+
+### Option C: Bootable USB
+- ✅ Most flexible option
+- ✅ Completely independent from Linux
+- ✅ Can safely wipe ALL internal disks during installation
+
+## Tiny11 Trimming Presets
+
+Reduce Windows bloat before installation:
+
+- **minimal** - Remove consumer apps (keep Microsoft Store, Defender, BitLocker)
+- **lite** - minimal + remove Windows Help, Media Player, Quick Assist
+- **aggressive** - minimal + Photos, Maps, Camera, Calculator, Paint, etc.
+- **vanilla** - No modifications (full Windows 11)
+
+## Example Session
+
+```bash
+$ ./win11-setup.sh
+
+╔═══════════════════════════════════════════════════════════════╗
+║           Win-Reboot-Project: Windows 11 Setup                ║
+║        Inspired by the Tiny11 Project by ntdevlabs            ║
+╚═══════════════════════════════════════════════════════════════╝
+
+Continue? [y/N]: y
+
+[+] Checking dependencies...
+[+] Step 1: Fetch Windows 11 ISO
+    Visit: https://uupdump.net
+    [File picker opens...]
+    
+[+] Step 2: Tiny11 trimming (optional)
+    Apply Tiny11 trimming? [Y/n]: y
+    Preset [minimal/lite/aggressive/vanilla]: minimal
+    
+[+] Step 3: Installer Media Setup
+    Use GRUB loopback? [Y/n]: y
+    
+[+] Step 4: GRUB Configuration
+    [Creates GRUB entry...]
+    
+[+] Step 5: Reboot
+    Reboot now? [y/N]: y
+```
+
+## Troubleshooting
+
+**Missing dependencies**
+- The script will prompt to auto-install them
+- Or install manually for your distro
+
+**"Secure Boot must be disabled"** (GRUB loopback only)
+- Restart and enter BIOS/UEFI (usually Del, F2, or F12 at boot)
+- Find "Secure Boot" setting and disable it
+- USB/Dedicated disk options work with Secure Boot enabled
+
+**GRUB entry not appearing**
+- Verify ISO copied: `ls -lh /boot/win11.iso`
+- Regenerate GRUB: `sudo grub-mkconfig -o /boot/grub/grub.cfg`
+
+**Want to format Linux disk during Windows install?**
+- Use Option B (dedicated disk) or C (USB) instead of GRUB loopback
+- Choose "Windows Bootloader" when prompted
+- This makes the installer completely independent from Linux
+
+**ISO extraction or WIM mounting fails**
+- Ensure 20+ GB free space in `/tmp` or set `TMP_DIR=/path/to/space`
+- Check that wimlib-imagex is properly installed
+
+## Project Structure
+
+```
+Win-Reboot-Project/
+├── win11-setup.sh          # Main entry point (Linux; auto-redirects macOS)
+├── macos-setup.sh          # macOS-specific setup (Sonoma/Sequoia, M-series + Intel)
+├── README.md               # This file
+├── LICENSE                 # License information
+├── data/
+│   └── removal-presets/    # Tiny11 package removal lists
+├── drivers/                # Optional: place driver archives/INFs here
+├── out/                    # Generated ISOs (created automatically)
+└── tmp/                    # Temporary files (created automatically)
+```
+
+## Credits
+
+Inspired by the excellent [Tiny11 Project](https://github.com/ntdevlabs/tiny11builder) by ntdevlabs.
+
+Windows 11 downloads provided by [UUP dump](https://uupdump.net) (community service).
+
+## License
+
+See [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+This is a simplified, single-script project. For improvements:
+1. Test your changes thoroughly
+2. Submit pull requests with clear descriptions
+3. Keep it simple - the goal is one self-contained script
+
+## Safety Notes
+
+⚠️ **Important Warnings:**
+- This tool modifies your boot configuration
+- The Windows installer can completely wipe your disks
+- **Test in a virtual machine first** if you're unsure
+- Always backup important data before proceeding
+- Dual-booting requires careful partition management
+
+🔒 **Security:**
+- All Windows files download directly from Microsoft CDN
+- UUP dump scripts are open source and auditable
+- Review the script before running with elevated privileges

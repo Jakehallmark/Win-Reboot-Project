@@ -1,3 +1,17 @@
+# Build outputs
 out/
 tmp/
-*.iso
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs
+*.log

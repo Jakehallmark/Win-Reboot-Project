@@ -1,0 +1,20 @@
+# Additional Tiny11 removals - extends minimal preset
+@include minimal
+
+# Additional bloatware
+Program Files/WindowsApps/Microsoft.Wallet_*
+Program Files/WindowsApps/Microsoft.Windows.Photos_*
+Program Files/WindowsApps/Microsoft.WindowsMaps_*
+Program Files/WindowsApps/Microsoft.WindowsCamera_*
+Program Files/WindowsApps/Microsoft.WindowsAlarms_*
+Program Files/WindowsApps/Microsoft.WindowsCalculator_*
+Program Files/WindowsApps/Microsoft.Paint_*
+Program Files/WindowsApps/Microsoft.ScreenSketch_*
+Program Files/WindowsApps/Microsoft.WindowsSoundRecorder_*
+Program Files/WindowsApps/Microsoft.549981C3F5F10_*
+
+# Xbox related
+Windows/SystemApps/Microsoft.Xbox*
+
+# Cortana
+Windows/SystemApps/*Cortana*
