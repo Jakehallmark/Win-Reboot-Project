@@ -40,6 +40,20 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   fi
 fi
 
+# Redirect Git Bash / MSYS / Cygwin users on Windows to the native PowerShell flow.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    WINDOWS_SCRIPT="$SCRIPT_DIR/windows-setup.ps1"
+    if [[ -f "$WINDOWS_SCRIPT" ]]; then
+      exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WINDOWS_SCRIPT" "$@"
+    else
+      echo "[+] Windows detected. Downloading windows-setup.ps1..."
+      exec powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+        "iwr -UseBasicParsing https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/windows-setup.ps1 | iex"
+    fi
+    ;;
+esac
+
 #============================================================================
 # CONFIGURATION
 #============================================================================

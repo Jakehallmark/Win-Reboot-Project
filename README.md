@@ -1,25 +1,69 @@
 # Win-Reboot-Project
 
-Download, customize, and boot Windows 11 from Linux or macOS with a single command.
+Download, customize, trim, and boot Windows 11 from Linux, macOS, or Windows.
 
 ## Quick Start
 
 ### Option 1: One-Liner (No Git Clone Required)
 
 ```bash
-# Works on both Linux and macOS — auto-detects your platform
+# Works on Linux, macOS, and Git Bash on Windows — auto-detects your platform
 curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/win11-setup.sh | bash
 ```
+
+### Windows PowerShell One-Liner
+
+```powershell
+iwr -UseBasicParsing https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/windows-setup.ps1 | iex
+```
+
+Run that from the folder where you want `out/` and `tmp/` created.
 
 ### Option 2: Clone and Run
 
 ```bash
 git clone https://github.com/Jakehallmark/Win-Reboot-Project.git
 cd Win-Reboot-Project
-./win11-setup.sh   # Linux: runs directly | macOS: auto-redirects to macos-setup.sh
+./win11-setup.sh   # Linux: runs directly | macOS: redirects to macos-setup.sh | Git Bash on Windows: redirects to windows-setup.ps1
 ```
 
-Both methods work identically on both platforms.
+For native PowerShell on Windows:
+
+```powershell
+git clone https://github.com/Jakehallmark/Win-Reboot-Project.git
+cd Win-Reboot-Project
+powershell -ExecutionPolicy Bypass -File .\windows-setup.ps1
+```
+
+Or from `cmd.exe`:
+
+```bat
+win11-setup.cmd
+```
+
+All entrypoints lead into the same platform-specific workflow.
+
+## Windows Support
+
+Windows 10 and Windows 11 can now run the project natively through PowerShell in an Administrator session.
+
+### Windows Requirements
+
+- **Windows 10 or Windows 11**
+- **PowerShell as Administrator**
+- **USB drive** — 8 GB minimum, 20 GB recommended
+- **20+ GB free disk space**
+- **Internet connection** for UUP dump and tiny11builder downloads
+
+### Windows Flow
+
+1. **Downloads Windows 11** - Runs the UUP dump Windows package (`uup_download_windows.cmd`)
+2. **Runs Tiny11** (optional) - Downloads `ntdevlabs/tiny11builder` and launches `tiny11maker.ps1` or `tiny11Coremaker.ps1`
+3. **Injects drivers properly** - Detects `.inf` driver trees and injects them offline into `boot.wim` and `install.wim` with `DISM`
+4. **Creates a proper USB** - Uses native Windows tools (`diskpart`, `DISM`, `robocopy`)
+5. **Handles large WIM files** - Splits `install.wim` automatically for FAT32 compatibility
+
+At startup, Windows also offers a **drivers-only** mode that updates an already-created installer USB in place.
 
 ## macOS Support
 
@@ -51,15 +95,15 @@ Restart, immediately hold **Option (Alt)**, then select the **WIN11_INST** USB d
 
 ## What It Does
 
-1. **Downloads Windows 11** - Fetches official ISO from UUP dump (uupdump.net)
-2. **Tiny11 Trimming** (optional) - Removes bloat to reduce ISO size
-3. **Sets Up Installer** - Choose GRUB loopback, USB drive, or dedicated disk
-4. **Configures Boot** - Automatic GRUB entry or UEFI boot instructions
-5. **Reboots to Installer** - Start Windows installation immediately
+1. **Downloads Windows 11** - Fetches official media from UUP dump
+2. **Tiny11 Trimming** (optional) - Uses best-effort trimming on Linux/macOS and native tiny11builder on Windows
+3. **Sets Up Installer** - Choose GRUB loopback, USB drive, or dedicated disk where supported
+4. **Configures Boot** - Automatic GRUB entry or native UEFI boot instructions
+5. **Reboots / boots to Installer** - Start Windows installation when ready
 
 ## Requirements
 
-- **Linux or macOS** (Linux: Ubuntu/Debian/Fedora/Arch/Mint | macOS: Sonoma 14+ / Sequoia 15+)
+- **Linux, macOS, or Windows**
 - **Secure Boot disabled** (required for GRUB loopback on Linux)
 - **20+ GB free disk space**
 - **Internet connection** (downloads from Microsoft CDN)
@@ -69,6 +113,18 @@ The script auto-installs missing dependencies:
 - `wimlib-imagex` - Windows image manipulation
 - `xorriso` - ISO creation/extraction
 - `parted` / `mkfs.fat` - Disk management (for USB/disk options)
+
+On Windows, the native flow uses built-in tooling:
+- `uup_download_windows.cmd` - UUP dump Windows downloader/converter
+- `tiny11maker.ps1` / `tiny11Coremaker.ps1` - Native Tiny11 image build
+- `DISM` - Image conversion, offline driver injection, and WIM splitting
+- `diskpart` / `robocopy` - USB formatting and file copy
+
+For Windows driver archives:
+- `.zip` uses PowerShell `Expand-Archive`
+- `.cab` uses built-in `expand.exe`
+- `.msi` uses built-in `msiexec.exe`
+- `.exe` extraction uses `7-Zip` when needed; the script can prompt to install it with `winget`
 
 ## Three Installation Methods
 
@@ -87,6 +143,7 @@ The script auto-installs missing dependencies:
 - ✅ Most flexible option
 - ✅ Completely independent from Linux
 - ✅ Can safely wipe ALL internal disks during installation
+- ✅ Native first-class path on macOS and Windows too
 
 ## Tiny11 Trimming Presets
 
@@ -128,6 +185,8 @@ Continue? [y/N]: y
     Reboot now? [y/N]: y
 ```
 
+On Windows, the equivalent flow runs the UUP dump Windows package, optionally launches `tiny11maker.ps1`, and then writes the USB with native Windows tooling.
+
 ## Troubleshooting
 
 **Missing dependencies**
@@ -154,9 +213,11 @@ Continue? [y/N]: y
 
 ## Project Structure
 
-```
+```text
 Win-Reboot-Project/
-├── win11-setup.sh          # Main entry point (Linux; auto-redirects macOS)
+├── win11-setup.sh          # Main bash entry point (Linux + macOS + Git Bash on Windows)
+├── win11-setup.cmd         # Native Windows launcher for cmd.exe
+├── windows-setup.ps1       # Native Windows PowerShell workflow
 ├── macos-setup.sh          # macOS-specific setup (Sonoma/Sequoia, M-series + Intel)
 ├── README.md               # This file
 ├── LICENSE                 # License information
