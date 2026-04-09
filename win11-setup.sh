@@ -7,9 +7,10 @@ set -euo pipefail
 #   Remote: curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/win11-setup.sh | bash
 
 # BASH_SOURCE may be unset when this script is run via stdin (curl | bash).
-SCRIPT_SOURCE="${BASH_SOURCE[0]-}"
-if [[ -z "$SCRIPT_SOURCE" ]]; then
-  SCRIPT_SOURCE="$0"
+# On macOS Bash 3.2, avoid indexing BASH_SOURCE unless it is set.
+SCRIPT_SOURCE="$0"
+if [[ -n "${BASH_SOURCE:-}" ]]; then
+  SCRIPT_SOURCE="${BASH_SOURCE[0]}"
 fi
 if [[ "$SCRIPT_SOURCE" == "bash" || "$SCRIPT_SOURCE" == "-" ]]; then
   SCRIPT_DIR="$PWD"
@@ -18,7 +19,7 @@ else
 fi
 
 BOOTSTRAP_MODE="file"
-if [[ -z "${BASH_SOURCE[0]-}" || "$0" == "bash" || "$0" == "-" ]]; then
+if [[ -z "${BASH_SOURCE:-}" || "$0" == "bash" || "$0" == "-" ]]; then
   BOOTSTRAP_MODE="stdin"
 fi
 
@@ -61,6 +62,10 @@ msg()  { echo "[+] $*"; }
 warn() { echo "[!] $*" >&2; }
 err()  { echo "[!] ERROR: $*" >&2; exit 1; }
 
+to_lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 prompt_yn() {
   local prompt="$1"
   local default="${2:-n}"
@@ -72,7 +77,7 @@ prompt_yn() {
     read -r -p "$prompt [y/N]: " answer < /dev/tty
     answer="${answer:-n}"
   fi
-  [[ "${answer,,}" == "y" ]]
+  [[ "$(to_lower "$answer")" == "y" ]]
 }
 
 require_cmd() {
@@ -190,7 +195,7 @@ extract_any_driver_payloads() {
   local f
   for f in "$in_dir"/*; do
     [[ -f "$f" ]] || continue
-    case "${f,,}" in
+    case "$(to_lower "$f")" in
       *.zip)
         command -v unzip >/dev/null 2>&1 || err "Need unzip to extract: $f"
         mkdir -p "$out_dir/$(basename "$f").d"
@@ -897,7 +902,7 @@ EOF
   local choice
   read -r -p "Select option (B or C): " choice < /dev/tty
 
-  case "${choice,,}" in
+  case "$(to_lower "$choice")" in
     b) setup_disk || { warn "Disk setup failed"; return 1; } ;;
     c) setup_usb  || { warn "USB setup failed"; return 1; } ;;
     *) err "Invalid option (must be B or C)" ;;
