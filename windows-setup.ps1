@@ -393,6 +393,112 @@ function Confirm-ArchMismatchIfNeeded {
     }
 }
 
+function Get-DownloadsDirectory {
+    $downloads = [Environment]::GetFolderPath("Downloads")
+    if (-not [string]::IsNullOrWhiteSpace($downloads) -and (Test-Path -LiteralPath $downloads)) {
+        return $downloads
+    }
+
+    $fallback = Join-Path ([Environment]::GetFolderPath("UserProfile")) "Downloads"
+    if (Test-Path -LiteralPath $fallback) {
+        return $fallback
+    }
+
+    return $null
+}
+
+function Pick-FileWindows {
+    param(
+        [string]$InitialDirectory,
+        [string]$Title,
+        [string]$Filter = "ZIP files (*.zip)|*.zip|All files (*.*)|*.*"
+    )
+
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        $dialog = New-Object System.Windows.Forms.OpenFileDialog
+        $dialog.Title = $Title
+        $dialog.Filter = $Filter
+        $dialog.Multiselect = $false
+        if (-not [string]::IsNullOrWhiteSpace($InitialDirectory) -and (Test-Path -LiteralPath $InitialDirectory)) {
+            $dialog.InitialDirectory = $InitialDirectory
+        }
+
+        if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            return $dialog.FileName
+        }
+    }
+    catch {
+        Write-WarnMsg "File picker could not be opened. Falling back to Downloads scan and manual entry."
+    }
+
+    return $null
+}
+
+function Get-UupDumpZipCandidates {
+    param([string]$SearchRoot)
+
+    if ([string]::IsNullOrWhiteSpace($SearchRoot) -or -not (Test-Path -LiteralPath $SearchRoot)) {
+        return @()
+    }
+
+    $candidates = Get-ChildItem -Path $SearchRoot -File -Filter "*.zip" -ErrorAction SilentlyContinue | ForEach-Object {
+        $nameLower = $_.Name.ToLowerInvariant()
+        $score = 0
+
+        if ($nameLower -match 'uupdump|uup') { $score += 8 }
+        if ($nameLower -match 'windows11|windows_11|win11') { $score += 4 }
+        if ($nameLower -match 'amd64|x64|arm64|aarch64') { $score += 2 }
+        if ($nameLower -match '^[0-9a-f]{6,}.*\.zip$') { $score += 1 }
+
+        [pscustomobject]@{
+            Path = $_.FullName
+            Name = $_.Name
+            LastWriteTime = $_.LastWriteTime
+            Score = $score
+        }
+    } | Where-Object { $_.Score -gt 0 } |
+        Sort-Object @{ Expression = "Score"; Descending = $true }, @{ Expression = "LastWriteTime"; Descending = $true } |
+        Select-Object -First 8
+
+    return @($candidates)
+}
+
+function Get-UupPackageSourcePath {
+    $downloads = Get-DownloadsDirectory
+    $pickedFile = Pick-FileWindows -InitialDirectory $downloads -Title "Select a UUP dump ZIP package"
+    if (-not [string]::IsNullOrWhiteSpace($pickedFile)) {
+        return $pickedFile
+    }
+
+    $candidates = @(Get-UupDumpZipCandidates -SearchRoot $downloads)
+    if ($candidates.Count -gt 0) {
+        Write-Host "Possible UUP dump ZIP packages found in Downloads:"
+        for ($i = 0; $i -lt $candidates.Count; $i++) {
+            $candidate = $candidates[$i]
+            Write-Host ("  {0}) {1}  ({2})" -f ($i + 1), $candidate.Name, $candidate.LastWriteTime)
+        }
+        Write-Host ("  {0}) Enter a path manually" -f ($candidates.Count + 1))
+        Write-Host ""
+
+        while ($true) {
+            $raw = Read-Host ("Select a ZIP from Downloads (1-{0})" -f ($candidates.Count + 1))
+            $choiceNumber = 0
+            if ([int]::TryParse($raw, [ref]$choiceNumber)) {
+                if ($choiceNumber -ge 1 -and $choiceNumber -le $candidates.Count) {
+                    return $candidates[$choiceNumber - 1].Path
+                }
+                if ($choiceNumber -eq ($candidates.Count + 1)) {
+                    break
+                }
+            }
+            Write-WarnMsg "Invalid selection. Please try again."
+        }
+    }
+
+    return (Read-Host "Path to the UUP dump ZIP or extracted folder")
+}
+
 function Get-UupPackageRoot {
     Write-Host ""
     Write-Host "Download a Windows 11 build from UUP dump:"
@@ -404,7 +510,7 @@ function Get-UupPackageRoot {
     Write-Host ""
 
     while ($true) {
-        $sourcePath = Read-Host "Path to the UUP dump ZIP or extracted folder"
+        $sourcePath = Get-UupPackageSourcePath
         if ([string]::IsNullOrWhiteSpace($sourcePath)) {
             Write-WarnMsg "A path is required."
             continue

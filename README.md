@@ -66,6 +66,7 @@ Windows 10 and Windows 11 can now run the project natively through PowerShell. I
 5. **Handles large WIM files** - Splits `install.wim` automatically for FAT32 compatibility
 
 At startup, Windows also offers a **drivers-only** mode that updates an already-created installer USB in place.
+When selecting the UUP dump package, Windows first tries a file picker and then scans `Downloads` for likely UUP dump ZIP files before falling back to manual path entry.
 
 ## macOS Support
 
