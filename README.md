@@ -47,12 +47,12 @@ All entrypoints lead into the same platform-specific workflow.
 
 ## Windows Support
 
-Windows 10 and Windows 11 can now run the project natively through PowerShell in an Administrator session.
+Windows 10 and Windows 11 can now run the project natively through PowerShell. If needed, the script first explains why elevation is required, then asks before showing the UAC Administrator prompt.
 
 ### Windows Requirements
 
 - **Windows 10 or Windows 11**
-- **PowerShell as Administrator**
+- **PowerShell** — the script will request Administrator elevation when required
 - **USB drive** — 8 GB minimum, 20 GB recommended
 - **20+ GB free disk space**
 - **Internet connection** for UUP dump and tiny11builder downloads

@@ -22,6 +22,7 @@ $Script:DriversDir = Join-Path $Script:RootDir "drivers"
 $Script:InstallerVolLabel = "WIN11_INST"
 $Script:WimSplitMb = 3800
 $Script:Tiny11ZipUrl = "https://github.com/ntdevlabs/tiny11builder/archive/refs/heads/main.zip"
+$Script:RemoteScriptUrl = "https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/windows-setup.ps1"
 
 New-Item -ItemType Directory -Force -Path $Script:TmpDir, $Script:OutDir | Out-Null
 
@@ -38,6 +39,11 @@ function Write-WarnMsg {
 function Fail {
     param([string]$Message)
     throw $Message
+}
+
+function ConvertTo-SingleQuotedPSString {
+    param([string]$Value)
+    return "'" + $Value.Replace("'", "''") + "'"
 }
 
 function Prompt-YesNo {
@@ -94,7 +100,35 @@ function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        Fail "Run this PowerShell session as Administrator."
+        $currentDir = (Get-Location).Path
+        $psArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass")
+
+        if (-not [string]::IsNullOrWhiteSpace($scriptPath)) {
+            $psArgs += @("-File", $scriptPath)
+        } else {
+            $escapedDir = ConvertTo-SingleQuotedPSString -Value $currentDir
+            $escapedUrl = ConvertTo-SingleQuotedPSString -Value $Script:RemoteScriptUrl
+            $command = "Set-Location -LiteralPath $escapedDir; (Invoke-WebRequest -UseBasicParsing $escapedUrl).Content | Invoke-Expression"
+            $psArgs += @("-Command", $command)
+        }
+
+        Write-Host ""
+        Write-Host "This script needs Administrator access to build and modify Windows installer media."
+        Write-Host "It may mount images, inject drivers, format USB media, and run DISM/diskpart."
+        Write-Host "If you do not trust this script, choose No and it will exit without elevating."
+        Write-Host ""
+        if (-not (Prompt-YesNo "Request Administrator elevation through UAC now?" $true)) {
+            Fail "Elevation was declined by the user."
+        }
+
+        Write-Msg "Requesting Administrator elevation..."
+        try {
+            Start-Process -FilePath "powershell.exe" -ArgumentList $psArgs -WorkingDirectory $currentDir -Verb RunAs | Out-Null
+        }
+        catch {
+            Fail "Administrator permission was not granted."
+        }
+        exit 0
     }
 }
 
