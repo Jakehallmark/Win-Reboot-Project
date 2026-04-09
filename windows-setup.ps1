@@ -394,11 +394,6 @@ function Confirm-ArchMismatchIfNeeded {
 }
 
 function Get-DownloadsDirectory {
-    $downloads = [Environment]::GetFolderPath("Downloads")
-    if (-not [string]::IsNullOrWhiteSpace($downloads) -and (Test-Path -LiteralPath $downloads)) {
-        return $downloads
-    }
-
     $fallback = Join-Path ([Environment]::GetFolderPath("UserProfile")) "Downloads"
     if (Test-Path -LiteralPath $fallback) {
         return $fallback
