@@ -541,6 +541,17 @@ pick_file_macos() {
   echo "$result"
 }
 
+pick_dir_macos() {
+  local prompt_text="$1"
+  local result=""
+  # Skip GUI picker if over SSH
+  if [[ -z "${SSH_CONNECTION:-}" && -z "${SSH_CLIENT:-}" ]]; then
+    result="$(osascript -e "POSIX path of (choose folder with prompt \"$prompt_text\")" 2>/dev/null || true)"
+    result="${result%$'\n'}"
+  fi
+  echo "$result"
+}
+
 step_fetch_iso() {
   msg "Step 1: Fetch Windows 11 ISO"
   echo ""
@@ -559,33 +570,52 @@ Download a Windows 11 build from UUP dump:
   3. Choose your language and edition(s)
   4. On the download page, select the macOS download package
      (for Apple Silicon, choose the ARM64 build for native boot)
-  5. Download the ZIP file
+  5. Download the ZIP file (or use the auto-extracted folder from Downloads)
 
-Press Enter when ready to select the downloaded ZIP...
+Press Enter when ready to select the downloaded ZIP or extracted folder...
 EOF
 
   read -r -p "" < /dev/tty
   echo ""
 
-  local zip_file
-  zip_file="$(pick_file_macos "Select UUP dump ZIP file")"
+  local source_path
+  source_path="$(pick_file_macos "Select UUP dump ZIP file (Cancel to choose folder)")"
 
-  if [[ -z "$zip_file" ]]; then
-    read -r -p "Path to UUP dump ZIP: " zip_file < /dev/tty
+  if [[ -z "$source_path" ]]; then
+    source_path="$(pick_dir_macos "Select extracted UUP dump folder (or Cancel to type path)")"
   fi
 
-  zip_file="${zip_file%$'\n'}"
-  [[ -f "$zip_file" ]] || err "File not found: $zip_file"
+  if [[ -z "$source_path" ]]; then
+    read -r -p "Path to UUP dump ZIP or extracted folder: " source_path < /dev/tty
+  fi
 
-  msg "Extracting UUP dump package..."
-  local pkg_dir="$TMP_DIR/uupdump"
-  rm -rf "$pkg_dir"
-  mkdir -p "$pkg_dir"
-  unzip -q "$zip_file" -d "$pkg_dir" || err "Failed to extract ZIP"
+  source_path="${source_path%$'\n'}"
+  [[ -e "$source_path" ]] || err "Path not found: $source_path"
+
+  local pkg_dir=""
+  if [[ -d "$source_path" ]]; then
+    pkg_dir="$source_path"
+    msg "Using extracted UUP dump folder: $pkg_dir"
+  elif [[ -f "$source_path" ]]; then
+    case "$(to_lower "$source_path")" in
+      *.zip)
+        msg "Extracting UUP dump package..."
+        pkg_dir="$TMP_DIR/uupdump"
+        rm -rf "$pkg_dir"
+        mkdir -p "$pkg_dir"
+        unzip -q "$source_path" -d "$pkg_dir" || err "Failed to extract ZIP"
+        ;;
+      *)
+        err "Unsupported file type: $source_path (expected .zip or extracted folder)"
+        ;;
+    esac
+  else
+    err "Unsupported path type: $source_path"
+  fi
 
   local host_arch uup_arch
   host_arch="$(normalize_host_arch)"
-  uup_arch="$(detect_uup_arch_from_pkg "$pkg_dir" "$zip_file")"
+  uup_arch="$(detect_uup_arch_from_pkg "$pkg_dir" "$source_path")"
   msg "Host CPU architecture: $host_arch"
   if [[ "$uup_arch" == "unknown" ]]; then
     warn "Could not confidently detect UUP package architecture."
