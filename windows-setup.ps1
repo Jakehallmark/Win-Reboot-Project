@@ -1,7 +1,14 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$scriptPath = $MyInvocation.MyCommand.Path
+$scriptPath = $null
+if ($MyInvocation -and $MyInvocation.MyCommand) {
+    $pathProperty = $MyInvocation.MyCommand.PSObject.Properties["Path"]
+    if ($pathProperty) {
+        $scriptPath = $pathProperty.Value
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($scriptPath)) {
     $Script:RootDir = (Get-Location).Path
 } else {

@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/mai
 ### Windows PowerShell One-Liner
 
 ```powershell
-iwr -UseBasicParsing https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/windows-setup.ps1 | iex
+(iwr -UseBasicParsing https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/windows-setup.ps1).Content | iex
 ```
 
 Use that in Windows PowerShell. `curl -fsSL ... | bash` is not a PowerShell command because `curl` maps to `Invoke-WebRequest` there.
