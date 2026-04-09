@@ -328,8 +328,6 @@ ensure_homebrew() {
 
 check_dependencies() {
   msg "Checking dependencies..."
-  check_macos_version
-  ensure_homebrew
 
   # Homebrew packages: package_name -> command_to_check
   local -a pkgs=("aria2" "wimlib" "xorriso" "cabextract" "p7zip")
@@ -340,6 +338,11 @@ check_dependencies() {
     command -v "${cmds[$i]}" >/dev/null 2>&1 || missing_pkgs+=("${pkgs[$i]}")
   done
 
+  # UUP scripts often require either mkisofs or genisoimage.
+  if ! command -v mkisofs >/dev/null 2>&1 && ! command -v genisoimage >/dev/null 2>&1; then
+    missing_pkgs+=("cdrtools")
+  fi
+
   if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
     warn "Missing Homebrew packages: ${missing_pkgs[*]}"
     if prompt_yn "Auto-install with 'brew install'?" "y"; then
@@ -348,6 +351,14 @@ check_dependencies() {
     else
       err "Cannot continue without required dependencies"
     fi
+  fi
+
+  # Final verification after any installs.
+  for c in aria2c wimlib-imagex xorriso cabextract 7z; do
+    command -v "$c" >/dev/null 2>&1 || err "Missing required command after install: $c"
+  done
+  if ! command -v mkisofs >/dev/null 2>&1 && ! command -v genisoimage >/dev/null 2>&1; then
+    err "Missing required ISO builder command: mkisofs or genisoimage (try: brew install cdrtools)"
   fi
 
   detect_macfuse
@@ -1094,6 +1105,8 @@ EOF
 
 main() {
   cd "$ROOT_DIR"
+  check_macos_version
+  ensure_homebrew
   intro
   check_dependencies
   step_fetch_iso
