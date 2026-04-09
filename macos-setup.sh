@@ -571,39 +571,24 @@ find_uup_download_script() {
   return 1
 }
 
-strip_chntpw_from_uup_script() {
-  local script_path="$1"
-  local tmp_script="$TMP_DIR/uup_script_patched.sh"
+strip_chntpw_from_uup_package() {
+  local pkg_dir="$1"
+  local patched=0
 
-  grep -qi "chntpw" "$script_path" || return 0
+  # UUP packages may spread dependency checks across multiple sourced scripts.
+  while IFS= read -r -d '' script_path; do
+    grep -qi "chntpw" "$script_path" || continue
 
-  msg "Removing legacy chntpw checks from downloaded UUP script..."
+    if perl -0777 -i -pe 's/\bchntpw\b/true/ig' "$script_path" 2>/dev/null; then
+      patched=$((patched+1))
+    else
+      err "Failed to patch UUP script: $script_path"
+    fi
+  done < <(find "$pkg_dir" -type f -name '*.sh' -print0 2>/dev/null)
 
-  awk '
-    BEGIN { skip_block=0 }
-    {
-      line=$0
-      low=tolower(line)
-
-      if (skip_block==0 && low ~ /if[[:space:]].*(command[[:space:]]+-v|which|type)[[:space:]]+chntpw.*then/) {
-        skip_block=1
-        next
-      }
-
-      if (skip_block==1) {
-        if (line ~ /^[[:space:]]*fi[[:space:]]*$/) {
-          skip_block=0
-        }
-        next
-      }
-
-      gsub(/(^|[[:space:]])chntpw([[:space:]]|$)/, " ", line)
-      print line
-    }
-  ' "$script_path" > "$tmp_script" || err "Failed to patch UUP script"
-
-  mv "$tmp_script" "$script_path" || err "Failed to replace patched UUP script"
-  chmod +x "$script_path"
+  if [[ "$patched" -gt 0 ]]; then
+    msg "Removed legacy chntpw dependency references from $patched script(s)."
+  fi
 }
 
 step_fetch_iso() {
@@ -697,7 +682,7 @@ EOF
   chmod +x "$uup_script"
   local uup_script_dir
   uup_script_dir="$(dirname "$uup_script")"
-  strip_chntpw_from_uup_script "$uup_script"
+  strip_chntpw_from_uup_package "$pkg_dir"
   msg "Running UUP dump conversion (this may take a while)..."
   (cd "$uup_script_dir" && bash "$(basename "$uup_script")") || err "UUP dump conversion failed"
 
