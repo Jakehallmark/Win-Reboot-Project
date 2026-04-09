@@ -46,6 +46,14 @@ function ConvertTo-SingleQuotedPSString {
     return "'" + $Value.Replace("'", "''") + "'"
 }
 
+function Wait-BeforeExit {
+    param([string]$Prompt = "Press Enter to close this window")
+    try {
+        [void](Read-Host $Prompt)
+    }
+    catch { }
+}
+
 function Prompt-YesNo {
     param(
         [string]$Prompt,
@@ -1279,4 +1287,29 @@ function Main {
     Step-Finish -Mode "full"
 }
 
-Main
+try {
+    Main
+}
+catch {
+    Write-Host ""
+    Write-Host "[!] ERROR: $($_.Exception.Message)" -ForegroundColor Red
+
+    if ($_.InvocationInfo) {
+        $location = $_.InvocationInfo.PositionMessage
+        if (-not [string]::IsNullOrWhiteSpace($location)) {
+            Write-Host ""
+            Write-Host $location -ForegroundColor Yellow
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($_.ScriptStackTrace)) {
+        Write-Host ""
+        Write-Host "Stack trace:" -ForegroundColor Yellow
+        Write-Host $_.ScriptStackTrace
+    }
+
+    Write-Host ""
+    Write-Host "Report the error text above so it can be diagnosed." -ForegroundColor Yellow
+    Wait-BeforeExit
+    exit 1
+}
