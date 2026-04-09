@@ -43,6 +43,7 @@ ISO_PATH="$OUT_DIR/win11.iso"
 
 INSTALLER_VOL_LABEL="WIN11_INST"
 WIM_SPLIT_MB=3800
+CHECKSUM_VERIFY=1
 
 ARCH="$(uname -m)"   # arm64 = Apple Silicon, x86_64 = Intel
 [[ "$ARCH" == "arm64" ]] && HOMEBREW_PREFIX="/opt/homebrew" || HOMEBREW_PREFIX="/usr/local"
@@ -62,6 +63,35 @@ err()  { echo "[!] ERROR: $*" >&2; exit 1; }
 
 to_lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+sha256_file() {
+  local f="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$f" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$f" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$f" | awk '{print $NF}'
+  else
+    err "No SHA-256 tool found (install one of: shasum, sha256sum, openssl)"
+  fi
+}
+
+verify_checksum_if_enabled() {
+  local label="$1"
+  local file_path="$2"
+
+  [[ "$CHECKSUM_VERIFY" -eq 1 ]] || return 0
+  [[ -f "$file_path" ]] || {
+    warn "Checksum skipped (file missing): $file_path"
+    return 0
+  }
+
+  local size_bytes digest
+  size_bytes="$(wc -c < "$file_path" 2>/dev/null | tr -d ' ')"
+  digest="$(sha256_file "$file_path")"
+  msg "Checksum [$label] size=${size_bytes}B sha256=$digest"
 }
 
 normalize_host_arch() {
@@ -330,8 +360,8 @@ check_dependencies() {
   msg "Checking dependencies..."
 
   # Homebrew packages: package_name -> command_to_check
-  local -a pkgs=("aria2" "wimlib" "xorriso" "cabextract" "p7zip")
-  local -a cmds=("aria2c" "wimlib-imagex" "xorriso" "cabextract" "7z")
+  local -a pkgs=("aria2" "wimlib" "xorriso" "cabextract" "p7zip" "openssl@3")
+  local -a cmds=("aria2c" "wimlib-imagex" "xorriso" "cabextract" "7z" "openssl")
 
   local missing_pkgs=()
   for ((i=0; i<${#pkgs[@]}; i++)); do
@@ -354,7 +384,7 @@ check_dependencies() {
   fi
 
   # Final verification after any installs.
-  for c in aria2c wimlib-imagex xorriso cabextract 7z; do
+  for c in aria2c wimlib-imagex xorriso cabextract 7z openssl; do
     command -v "$c" >/dev/null 2>&1 || err "Missing required command after install: $c"
   done
   if ! command -v mkisofs >/dev/null 2>&1 && ! command -v genisoimage >/dev/null 2>&1; then
@@ -602,12 +632,40 @@ strip_chntpw_from_uup_package() {
   fi
 }
 
+patch_uup_launcher_for_runtime_sanitize() {
+  local launcher_path="$1"
+  local tmp_file="$TMP_DIR/uup_launcher_patched.sh"
+
+  grep -Eq './files/convert\.sh[[:space:]]+wim[[:space:]]+"\$destDir"[[:space:]]+0' "$launcher_path" || return 0
+
+  awk '
+    {
+      if ($0 ~ /\.\/files\/convert\.sh[[:space:]]+wim[[:space:]]+"\$destDir"[[:space:]]+0/) {
+        print "  # Sanitize freshly downloaded converter scripts before running conversion"
+        print "  if [ -d ./files ]; then"
+        print "    find ./files -type f -name '\''*.sh'\'' -print0 2>/dev/null | while IFS= read -r -d '\'''\'' f; do"
+        print "      perl -0777 -i -pe '\''s/\\bchntpw\\b/true/ig'\'' \"$f\" 2>/dev/null || true"
+        print "    done"
+        print "  fi"
+        print "  ./files/convert.sh wim \"$destDir\" 0"
+        next
+      }
+      print
+    }
+  ' "$launcher_path" > "$tmp_file" || err "Failed to patch UUP launcher runtime sanitizer"
+
+  mv "$tmp_file" "$launcher_path" || err "Failed to replace patched UUP launcher"
+  chmod +x "$launcher_path"
+  msg "Patched UUP launcher to sanitize downloaded converter scripts at runtime."
+}
+
 step_fetch_iso() {
   msg "Step 1: Fetch Windows 11 ISO"
   echo ""
 
   if [[ -f "$ISO_PATH" ]]; then
     if prompt_yn "ISO already exists at $ISO_PATH. Use it?" "y"; then
+      verify_checksum_if_enabled "iso-existing" "$ISO_PATH"
       return 0
     fi
   fi
@@ -649,6 +707,7 @@ EOF
   elif [[ -f "$source_path" ]]; then
     case "$(to_lower "$source_path")" in
       *.zip)
+        verify_checksum_if_enabled "uup-zip" "$source_path"
         msg "Extracting UUP dump package..."
         pkg_dir="$TMP_DIR/uupdump"
         rm -rf "$pkg_dir"
@@ -694,6 +753,7 @@ EOF
   local uup_script_dir
   uup_script_dir="$(dirname "$uup_script")"
   strip_chntpw_from_uup_package "$pkg_dir"
+  patch_uup_launcher_for_runtime_sanitize "$uup_script"
   msg "Running UUP dump conversion (this may take a while)..."
   (cd "$uup_script_dir" && bash "$(basename "$uup_script")") || err "UUP dump conversion failed"
 
@@ -702,6 +762,7 @@ EOF
   [[ -n "${built_iso:-}" ]] || err "No ISO produced by UUP dump"
 
   mv "$built_iso" "$ISO_PATH"
+  verify_checksum_if_enabled "iso-output" "$ISO_PATH"
   msg "ISO created: $ISO_PATH"
   echo ""
 }
@@ -720,6 +781,7 @@ load_preset_lines() {
       local url="https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/data/removal-presets/${preset}.txt"
       msg "Downloading preset: $preset"
       curl -fsSL "$url" -o "$preset_file" 2>/dev/null || return 1
+      verify_checksum_if_enabled "preset-${preset}" "$preset_file"
     fi
   fi
   [[ -f "$preset_file" ]] || return 1
@@ -865,6 +927,7 @@ step_tiny11() {
   local tiny_iso="$OUT_DIR/win11-trimmed.iso"
   rebuild_iso_from_tree "$iso_tree" "$tiny_iso" "WIN11_TRIM"
   mv "$tiny_iso" "$ISO_PATH"
+  verify_checksum_if_enabled "iso-trimmed" "$ISO_PATH"
   msg "Trimmed ISO ready: $ISO_PATH"
   echo ""
 }
@@ -1100,6 +1163,13 @@ Flow:
 
 EOF
   prompt_yn "Continue?" "n" || exit 0
+  if prompt_yn "Enable quick checksum verification throughout setup?" "y"; then
+    CHECKSUM_VERIFY=1
+    msg "Checksum verification enabled"
+  else
+    CHECKSUM_VERIFY=0
+    warn "Checksum verification disabled by user"
+  fi
   echo ""
 }
 

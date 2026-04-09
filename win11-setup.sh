@@ -51,6 +51,7 @@ ISO_PATH="$OUT_DIR/win11.iso"
 
 INSTALLER_VOL_LABEL="WIN11_INST"
 WIM_SPLIT_MB=3800   # keeps each .swm < 4GB for FAT32
+CHECKSUM_VERIFY=1
 
 mkdir -p "$TMP_DIR" "$OUT_DIR"
 
@@ -64,6 +65,35 @@ err()  { echo "[!] ERROR: $*" >&2; exit 1; }
 
 to_lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+sha256_file() {
+  local f="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$f" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$f" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$f" | awk '{print $NF}'
+  else
+    err "No SHA-256 tool found (install one of: sha256sum, shasum, openssl)"
+  fi
+}
+
+verify_checksum_if_enabled() {
+  local label="$1"
+  local file_path="$2"
+
+  [[ "$CHECKSUM_VERIFY" -eq 1 ]] || return 0
+  [[ -f "$file_path" ]] || {
+    warn "Checksum skipped (file missing): $file_path"
+    return 0
+  }
+
+  local size_bytes digest
+  size_bytes="$(wc -c < "$file_path" 2>/dev/null | tr -d ' ')"
+  digest="$(sha256_file "$file_path")"
+  msg "Checksum [$label] size=${size_bytes}B sha256=$digest"
 }
 
 normalize_host_arch() {
@@ -124,6 +154,50 @@ confirm_arch_mismatch_if_needed() {
   if ! prompt_yn "Proceed anyway with this architecture mismatch?" "n"; then
     err "Aborted by user due to architecture mismatch"
   fi
+}
+
+strip_chntpw_from_uup_package() {
+  local pkg_dir="$1"
+  local patched=0
+
+  while IFS= read -r -d '' script_path; do
+    grep -qi "chntpw" "$script_path" || continue
+
+    if sed -i 's/chntpw/true/g' "$script_path" 2>/dev/null; then
+      patched=$((patched+1))
+    else
+      err "Failed to patch UUP script: $script_path"
+    fi
+  done < <(find "$pkg_dir" -type f -name '*.sh' -print0 2>/dev/null)
+
+  if [[ "$patched" -gt 0 ]]; then
+    msg "Removed legacy chntpw dependency references from $patched script(s)."
+  fi
+}
+
+patch_uup_launcher_for_runtime_sanitize() {
+  local launcher_path="$1"
+  local tmp_file="$TMP_DIR/uup_launcher_patched.sh"
+
+  grep -Eq './files/convert\.sh[[:space:]]+wim[[:space:]]+"\$destDir"[[:space:]]+0' "$launcher_path" || return 0
+
+  awk '
+    {
+      if ($0 ~ /\.\/files\/convert\.sh[[:space:]]+wim[[:space:]]+"\$destDir"[[:space:]]+0/) {
+        print "  # Sanitize freshly downloaded converter scripts before running conversion"
+        print "  if [ -d ./files ]; then"
+        print "    find ./files -type f -name '\''*.sh'\'' -exec sed -i '\''s/chntpw/true/g'\'' {} + 2>/dev/null || true"
+        print "  fi"
+        print "  ./files/convert.sh wim \"$destDir\" 0"
+        next
+      }
+      print
+    }
+  ' "$launcher_path" > "$tmp_file" || err "Failed to patch UUP launcher runtime sanitizer"
+
+  mv "$tmp_file" "$launcher_path" || err "Failed to replace patched UUP launcher"
+  chmod +x "$launcher_path"
+  msg "Patched UUP launcher to sanitize downloaded converter scripts at runtime."
 }
 
 prompt_yn() {
@@ -430,6 +504,7 @@ check_dependencies() {
     wimlib-imagex
     xorriso
     parted mkfs.fat
+    openssl
   )
 
   for cmd in "${required_cmds[@]}"; do
@@ -442,13 +517,13 @@ check_dependencies() {
       case "$distro" in
         ubuntu|debian|linuxmint|pop)
           sudo apt-get update
-          sudo apt-get install -y curl unzip aria2 cabextract wimtools xorriso parted dosfstools
+          sudo apt-get install -y curl unzip aria2 cabextract wimtools xorriso parted dosfstools openssl
           ;;
         fedora|rhel|centos)
-          sudo dnf install -y curl unzip aria2 cabextract wimlib-utils xorriso parted dosfstools
+          sudo dnf install -y curl unzip aria2 cabextract wimlib-utils xorriso parted dosfstools openssl
           ;;
         arch|manjaro)
-          sudo pacman -S --needed --noconfirm curl unzip aria2 cabextract wimlib xorriso parted dosfstools
+          sudo pacman -S --needed --noconfirm curl unzip aria2 cabextract wimlib xorriso parted dosfstools openssl
           ;;
         *)
           err "Unsupported distro: ${distro:-unknown}. Install manually: ${missing[*]}"
@@ -473,6 +548,7 @@ step_fetch_iso() {
 
   if [[ -f "$ISO_PATH" ]]; then
     if prompt_yn "ISO already exists at $ISO_PATH. Use it?" "y"; then
+      verify_checksum_if_enabled "iso-existing" "$ISO_PATH"
       return 0
     fi
   fi
@@ -503,6 +579,7 @@ EOF
   fi
 
   [[ -f "$zip_file" ]] || err "File not found: $zip_file"
+  verify_checksum_if_enabled "uup-zip" "$zip_file"
 
   msg "Extracting UUP dump package..."
   local pkg_dir="$TMP_DIR/uupdump"
@@ -524,6 +601,9 @@ EOF
   [[ -f "$pkg_dir/uup_download_linux.sh" ]] || err "Invalid UUP dump package"
   chmod +x "$pkg_dir/uup_download_linux.sh"
 
+  strip_chntpw_from_uup_package "$pkg_dir"
+  patch_uup_launcher_for_runtime_sanitize "$pkg_dir/uup_download_linux.sh"
+
   msg "Running UUP dump conversion (this may take a while)..."
   (cd "$pkg_dir" && bash ./uup_download_linux.sh) || err "UUP dump conversion failed"
 
@@ -532,6 +612,7 @@ EOF
   [[ -n "${built_iso:-}" ]] || err "No ISO produced"
 
   mv "$built_iso" "$ISO_PATH"
+  verify_checksum_if_enabled "iso-output" "$ISO_PATH"
   msg "✓ ISO created: $ISO_PATH"
   echo ""
 }
@@ -555,6 +636,7 @@ load_preset_lines() {
       local preset_url="https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/data/removal-presets/${preset}.txt"
       msg "Downloading preset: $preset"
       curl -fsSL "$preset_url" -o "$preset_file" 2>/dev/null || return 1
+      verify_checksum_if_enabled "preset-${preset}" "$preset_file"
     fi
   fi
 
@@ -729,6 +811,7 @@ step_tiny11() {
   rebuild_iso_from_tree "$iso_tree" "$tiny_iso" "WIN11_TRIM"
 
   mv "$tiny_iso" "$ISO_PATH"
+  verify_checksum_if_enabled "iso-trimmed" "$ISO_PATH"
   msg "✓ Trimmed ISO ready: $ISO_PATH"
   echo ""
 }
@@ -1079,6 +1162,13 @@ Notes:
 EOF
 
   prompt_yn "Continue?" "n" || exit 0
+  if prompt_yn "Enable quick checksum verification throughout setup?" "y"; then
+    CHECKSUM_VERIFY=1
+    msg "Checksum verification enabled"
+  else
+    CHECKSUM_VERIFY=0
+    warn "Checksum verification disabled by user"
+  fi
   echo ""
 }
 
