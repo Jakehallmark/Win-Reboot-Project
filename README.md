@@ -4,10 +4,10 @@ Download, customize, trim, and boot Windows 11 from Linux, macOS, or Windows.
 
 ## Quick Start
 
-### Option 1: One-Liner (No Git Clone Required)
+### Option 1: Bash One-Liner (Linux, macOS, Git Bash)
 
 ```bash
-# Works on Linux, macOS, and Git Bash on Windows — auto-detects your platform
+# Use this in Bash shells only. In Windows PowerShell, use the PowerShell command below.
 curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/win11-setup.sh | bash
 ```
 
@@ -17,7 +17,9 @@ curl -fsSL https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/mai
 iwr -UseBasicParsing https://raw.githubusercontent.com/Jakehallmark/Win-Reboot-Project/main/windows-setup.ps1 | iex
 ```
 
-Run that from the folder where you want `out/` and `tmp/` created.
+Use that in Windows PowerShell. `curl -fsSL ... | bash` is not a PowerShell command because `curl` maps to `Invoke-WebRequest` there.
+
+Run the PowerShell one-liner from the folder where you want `out/` and `tmp/` created.
 
 ### Option 2: Clone and Run
 
