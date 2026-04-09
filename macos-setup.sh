@@ -571,6 +571,41 @@ find_uup_download_script() {
   return 1
 }
 
+strip_chntpw_from_uup_script() {
+  local script_path="$1"
+  local tmp_script="$TMP_DIR/uup_script_patched.sh"
+
+  grep -qi "chntpw" "$script_path" || return 0
+
+  msg "Removing legacy chntpw checks from downloaded UUP script..."
+
+  awk '
+    BEGIN { skip_block=0 }
+    {
+      line=$0
+      low=tolower(line)
+
+      if (skip_block==0 && low ~ /if[[:space:]].*(command[[:space:]]+-v|which|type)[[:space:]]+chntpw.*then/) {
+        skip_block=1
+        next
+      }
+
+      if (skip_block==1) {
+        if (line ~ /^[[:space:]]*fi[[:space:]]*$/) {
+          skip_block=0
+        }
+        next
+      }
+
+      gsub(/(^|[[:space:]])chntpw([[:space:]]|$)/, " ", line)
+      print line
+    }
+  ' "$script_path" > "$tmp_script" || err "Failed to patch UUP script"
+
+  mv "$tmp_script" "$script_path" || err "Failed to replace patched UUP script"
+  chmod +x "$script_path"
+}
+
 step_fetch_iso() {
   msg "Step 1: Fetch Windows 11 ISO"
   echo ""
@@ -662,6 +697,7 @@ EOF
   chmod +x "$uup_script"
   local uup_script_dir
   uup_script_dir="$(dirname "$uup_script")"
+  strip_chntpw_from_uup_script "$uup_script"
   msg "Running UUP dump conversion (this may take a while)..."
   (cd "$uup_script_dir" && bash "$(basename "$uup_script")") || err "UUP dump conversion failed"
 
