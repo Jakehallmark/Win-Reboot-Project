@@ -66,6 +66,66 @@ to_lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+normalize_host_arch() {
+  local raw
+  raw="$(to_lower "$(uname -m)")"
+  case "$raw" in
+    arm64|aarch64|armv8*|armv9*) echo "arm64" ;;
+    x86_64|amd64|x64|i386|i486|i586|i686|x86) echo "x64" ;;
+    *) echo "unknown" ;;
+  esac
+}
+
+detect_uup_arch_from_pkg() {
+  local pkg_dir="$1"
+  local zip_file="$2"
+
+  local arm_hits=0
+  local x64_hits=0
+  local zip_lower
+
+  zip_lower="$(to_lower "$(basename "$zip_file")")"
+  [[ "$zip_lower" == *"arm64"* || "$zip_lower" == *"aarch64"* ]] && arm_hits=$((arm_hits+4))
+  [[ "$zip_lower" == *"amd64"* || "$zip_lower" == *"x64"* || "$zip_lower" == *"x86_64"* ]] && x64_hits=$((x64_hits+4))
+
+  arm_hits=$((arm_hits + $(grep -RIEio 'arm64|aarch64' "$pkg_dir" 2>/dev/null | wc -l | tr -d ' ')))
+  x64_hits=$((x64_hits + $(grep -RIEio 'amd64|x64|x86_64' "$pkg_dir" 2>/dev/null | wc -l | tr -d ' ')))
+
+  if (( arm_hits > 0 && x64_hits == 0 )); then
+    echo "arm64"
+  elif (( x64_hits > 0 && arm_hits == 0 )); then
+    echo "x64"
+  elif (( arm_hits >= (x64_hits * 2) )); then
+    echo "arm64"
+  elif (( x64_hits >= (arm_hits * 2) )); then
+    echo "x64"
+  else
+    echo "unknown"
+  fi
+}
+
+confirm_arch_mismatch_if_needed() {
+  local host_arch="$1"
+  local target_arch="$2"
+
+  [[ "$host_arch" == "unknown" || "$target_arch" == "unknown" ]] && return 0
+  [[ "$host_arch" == "$target_arch" ]] && return 0
+
+  if [[ "$host_arch" == "arm64" && "$target_arch" == "x64" ]]; then
+    warn "Detected ARM host CPU, but selected UUP package appears to be x64/amd64."
+    warn "This may not boot natively on ARM-only targets."
+  elif [[ "$host_arch" == "x64" && "$target_arch" == "arm64" ]]; then
+    warn "Detected x86_64 host CPU, but selected UUP package appears to be ARM64."
+    warn "ARM64 media may not boot or install on x86_64 systems."
+  else
+    warn "Host CPU architecture ($host_arch) does not match selected UUP architecture ($target_arch)."
+  fi
+
+  if ! prompt_yn "Proceed anyway with this architecture mismatch?" "n"; then
+    err "Aborted by user due to architecture mismatch"
+  fi
+}
+
 prompt_yn() {
   local prompt="$1"
   local default="${2:-n}"
@@ -449,6 +509,17 @@ EOF
   rm -rf "$pkg_dir"
   mkdir -p "$pkg_dir"
   unzip -q "$zip_file" -d "$pkg_dir" || err "Failed to extract ZIP"
+
+  local host_arch uup_arch
+  host_arch="$(normalize_host_arch)"
+  uup_arch="$(detect_uup_arch_from_pkg "$pkg_dir" "$zip_file")"
+  msg "Host CPU architecture: $host_arch"
+  if [[ "$uup_arch" == "unknown" ]]; then
+    warn "Could not confidently detect UUP package architecture."
+  else
+    msg "Detected UUP package architecture: $uup_arch"
+  fi
+  confirm_arch_mismatch_if_needed "$host_arch" "$uup_arch"
 
   [[ -f "$pkg_dir/uup_download_linux.sh" ]] || err "Invalid UUP dump package"
   chmod +x "$pkg_dir/uup_download_linux.sh"
