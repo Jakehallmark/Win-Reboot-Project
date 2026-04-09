@@ -1077,7 +1077,7 @@ function Step-Finish {
     param([string]$Mode = "full")
 
     $stepNumber = if ($Mode -eq "drivers-only") { 2 } else { 4 }
-    Write-Msg "Step $stepNumber: Finish"
+    Write-Msg "Step ${stepNumber}: Finish"
     Write-Host ""
     if ($Mode -eq "drivers-only") {
         Write-Host "The selected Windows installer USB has been updated with the detected drivers."
